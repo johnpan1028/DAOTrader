@@ -1,0 +1,596 @@
+<html>
+  
+  <head>
+    <meta charset="utf-8">
+  </head>
+  
+  <body>
+    <h4 style="margin-left:0px;"><span><strong>第零步：项目初始化与vn.py安装</strong></span></h4>
+    <p style="margin-left:0px;"><span><strong>操作</strong>: 创建项目根目录，并以可编辑模式安装vn.py。</span>
+    </p>
+    <div>
+      <div>
+        <div>
+          <div>
+            <div><span style="color:rgb(249,250,251);">bash</span>
+            </div>
+          </div>
+        </div>
+      </div><pre><span style="color:rgb(141,161,185);"># 创建项目目录</span>
+<span style="color:rgb(198,153,227);">mkdir</span> vega-trader-core
+<span style="color:rgb(244,173,244);">cd</span> vega-trader-core
+
+<span style="color:rgb(141,161,185);"># 克隆vn.py源码（在项目根目录下）</span>
+<span style="color:rgb(198,153,227);">git</span> clone https://github.com/vnpy/vnpy.git
+
+<span style="color:rgb(141,161,185);"># 切换到最新稳定标签，例如v3.9.0</span>
+<span style="color:rgb(244,173,244);">cd</span> vnpy
+<span style="color:rgb(198,153,227);">git</span> checkout v3.9.0
+
+<span style="color:rgb(141,161,185);"># 以可编辑模式安装vn.py及其所有依赖（在当前激活的虚拟环境中执行）</span>
+pip <span style="color:rgb(198,153,227);">install</span> <span style="color:rgb(108,184,230);">-e</span> <span style="color:rgb(244,173,244);">.</span>
+<span style="color:rgb(198,153,227);">bash</span> install.sh</pre>
+      <svg>
+        <path d="M-5.24537e-07 0C-2.34843e-07 6.62742 5.37258 12 12 12L0 12L-5.24537e-07 0Z"
+        fill="currentColor"></path>
+      </svg>
+      <svg>
+        <path d="M-5.24537e-07 0C-2.34843e-07 6.62742 5.37258 12 12 12L0 12L-5.24537e-07 0Z"
+        fill="currentColor"></path>
+      </svg>
+    </div>
+    <h4 style="margin-left:0px;"><span><strong>第一步：搭建后端FastAPI服务器与vn.py集成</strong></span></h4>
+    <p style="margin-left:0px;"><span><strong>提示词 M1 - 创建FastAPI应用、WebSocket管理器及vn.py事件处理器</strong></span>
+    </p>
+    <div>
+      <div>
+        <div>
+          <div>
+            <div><span style="color:rgb(249,250,251);">text</span>
+            </div>
+          </div>
+        </div>
+      </div><pre>请扮演资深Python工程师，在项目根目录下创建`backend`目录，并搭建集成vn.py的FastAPI服务器。
+
+1. 创建`backend/requirements.txt`，写入核心依赖：</pre>
+      <svg>
+        <path d="M-5.24537e-07 0C-2.34843e-07 6.62742 5.37258 12 12 12L0 12L-5.24537e-07 0Z"
+        fill="currentColor"></path>
+      </svg>
+      <svg>
+        <path d="M-5.24537e-07 0C-2.34843e-07 6.62742 5.37258 12 12 12L0 12L-5.24537e-07 0Z"
+        fill="currentColor"></path>
+      </svg>
+    </div>
+    <p style="margin-left:0px;"><span>fastapi&gt;=0.104.0</span>
+      <br><span>uvicorn[standard]&gt;=0.24.0</span>
+      <br><span>websockets&gt;=12.0</span>
+    </p>
+    <div>
+      <div>
+        <div>
+          <div>
+            <div><span style="color:rgb(249,250,251);">text</span>
+            </div>
+          </div>
+        </div>
+      </div><pre>执行 `pip install -r requirements.txt`。
+
+2. 创建`backend/main.py`，实现以下完整功能：
+
+```python
+import asyncio
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
+import json
+import uvicorn
+
+# --- 1. vn.py 导入 ---
+from vnpy.event import EventEngine
+from vnpy.trader.engine import MainEngine
+from vnpy.trader.object import BarData, TickData
+from vnpy.gateway.ctp import CtpGateway
+from vnpy.app.data_recorder import DataRecorderApp
+from vnpy.app.csv_loader import CsvLoaderApp
+
+# --- 2. 全局变量定义 ---
+app = FastAPI()
+manager = None  # WebSocket管理器
+main_engine = None
+event_engine = None
+
+# --- 3. 生命周期管理 ---
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 启动时
+    global manager, main_engine, event_engine
+    manager = ConnectionManager()
+    
+    # 初始化vn.py事件引擎和主引擎
+    event_engine = EventEngine()
+    main_engine = MainEngine(event_engine)
+    
+    # 添加网关和应用（这里先添加CSVLoader用于加载模拟数据）
+    main_engine.add_gateway(CtpGateway)
+    main_engine.add_app(DataRecorderApp)
+    main_engine.add_app(CsvLoaderApp)  # 用于加载CSV模拟数据
+    
+    print("VN.PY主引擎初始化成功。")
+    
+    # 启动一个任务来模拟数据加载或等待连接
+    asyncio.create_task(simulate_data_loading())
+    
+    yield
+    
+    # 关闭时
+    if main_engine:
+        main_engine.close()
+
+app = FastAPI(lifespan=lifespan)
+
+# --- 4. 中间件配置 ---
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 开发阶段允许所有来源
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# --- 5. WebSocket连接管理器 ---
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: list[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.remove(websocket)
+
+    async def broadcast(self, message: str):
+        for connection in self.active_connections:
+            try:
+                await connection.send_text(message)
+            except:
+                self.disconnect(connection)
+
+# --- 6. 模拟数据生成与广播（后续替换为真实vn.py事件）---
+async def simulate_data_loading():
+    # 模拟等待一段时间，让服务器启动完成
+    await asyncio.sleep(2)
+    print("开始模拟数据广播...")
+    # 这里模拟vn.py持续产生数据并广播
+    # 后续将替换为真实的事件监听
+
+# --- 7. API端点 ---
+@app.get("/")
+async def root():
+    return {"message": "VegaTrader Server is Running"}
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+# --- 8. WebSocket端点 ---
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True:
+            # 保持连接打开，主要接收广播数据
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)</pre>
+      <svg>
+        <path d="M-5.24537e-07 0C-2.34843e-07 6.62742 5.37258 12 12 12L0 12L-5.24537e-07 0Z"
+        fill="currentColor"></path>
+      </svg>
+      <svg>
+        <path d="M-5.24537e-07 0C-2.34843e-07 6.62742 5.37258 12 12 12L0 12L-5.24537e-07 0Z"
+        fill="currentColor"></path>
+      </svg>
+    </div>
+    <p style="margin-left:0px;"><span>请提供完整的代码实现。</span>
+    </p>
+    <div>
+      <div>
+        <div>
+          <div>
+            <div><span style="color:rgb(249,250,251);">text</span>
+            </div>
+          </div>
+        </div>
+      </div><pre>**提示词 M2 - 创建vn.py事件处理器与数据转换器**
+</pre>
+      <svg>
+        <path d="M-5.24537e-07 0C-2.34843e-07 6.62742 5.37258 12 12 12L0 12L-5.24537e-07 0Z"
+        fill="currentColor"></path>
+      </svg>
+      <svg>
+        <path d="M-5.24537e-07 0C-2.34843e-07 6.62742 5.37258 12 12 12L0 12L-5.24537e-07 0Z"
+        fill="currentColor"></path>
+      </svg>
+    </div>
+    <p style="margin-left:0px;"><span>请接着上面的代码，在</span><code>backend/main.py</code><span>中添加vn.py事件处理功能：</span>
+    </p>
+    <ol>
+      <li data-list-item-id="eb0aaa48e71ba90ce484324c643dcb9b7">
+        <p style="margin-left:0px;"><span>在</span><code>lifespan</code><span>函数中的</span><code>main_engine</code><span>初始化后，添加事件处理器注册：</span>
+        </p>
+      </li>
+    </ol>
+    <div>
+      <div>
+        <div>
+          <div>
+            <div><span style="color:rgb(249,250,251);">python</span>
+            </div>
+          </div>
+        </div>
+      </div><pre><span style="color:rgb(141,161,185);"># 在main_engine = MainEngine(event_engine)后添加：</span>
+
+<span style="color:rgb(141,161,185);"># 创建事件处理器</span>
+data_handler <span style="color:rgb(233,174,126);">=</span> VnPyDataHandler<span style="color:rgb(227,234,242);">(</span>manager<span style="color:rgb(227,234,242);">.</span>broadcast<span style="color:rgb(227,234,242);">)</span>
+    
+<span style="color:rgb(141,161,185);"># 注册事件处理函数</span>
+event_engine<span style="color:rgb(227,234,242);">.</span>register<span style="color:rgb(227,234,242);">(</span><span style="color:rgb(145,208,118);">"EVENT_TICK"</span><span style="color:rgb(227,234,242);">,</span> data_handler<span style="color:rgb(227,234,242);">.</span>on_tick<span style="color:rgb(227,234,242);">)</span>
+event_engine<span style="color:rgb(227,234,242);">.</span>register<span style="color:rgb(227,234,242);">(</span><span style="color:rgb(145,208,118);">"EVENT_BAR"</span><span style="color:rgb(227,234,242);">,</span> data_handler<span style="color:rgb(227,234,242);">.</span>on_bar<span style="color:rgb(227,234,242);">)</span></pre>
+      <svg>
+        <path d="M-5.24537e-07 0C-2.34843e-07 6.62742 5.37258 12 12 12L0 12L-5.24537e-07 0Z"
+        fill="currentColor"></path>
+      </svg>
+      <svg>
+        <path d="M-5.24537e-07 0C-2.34843e-07 6.62742 5.37258 12 12 12L0 12L-5.24537e-07 0Z"
+        fill="currentColor"></path>
+      </svg>
+    </div>
+    <ol start="2">
+      <li data-list-item-id="e314655e7bcffe56d377c70704ecf4368">
+        <p style="margin-left:0px;"><span>在文件中添加</span><code>VnPyDataHandler</code><span>类：</span>
+        </p>
+      </li>
+    </ol>
+    <div>
+      <div>
+        <div>
+          <div>
+            <div><span style="color:rgb(249,250,251);">python</span>
+            </div>
+          </div>
+        </div>
+      </div><pre><span style="color:rgb(233,174,126);">class</span> <span style="color:rgb(108,184,230);">VnPyDataHandler</span><span style="color:rgb(227,234,242);">:</span>
+    <span style="color:rgb(233,174,126);">def</span> <span style="color:rgb(198,153,227);">__init__</span><span style="color:rgb(227,234,242);">(</span>self<span style="color:rgb(227,234,242);">,</span> broadcast_func<span style="color:rgb(227,234,242);">):</span>
+        self<span style="color:rgb(227,234,242);">.</span>broadcast <span style="color:rgb(233,174,126);">=</span> broadcast_func
+    
+    <span style="color:rgb(233,174,126);">def</span> <span style="color:rgb(198,153,227);">on_tick</span><span style="color:rgb(227,234,242);">(</span>self<span style="color:rgb(227,234,242);">,</span> event<span style="color:rgb(227,234,242);">):</span>
+        <span style="color:rgb(145,208,118);">"""处理Tick数据事件"""</span>
+        tick<span style="color:rgb(227,234,242);">:</span> TickData <span style="color:rgb(233,174,126);">=</span> event<span style="color:rgb(227,234,242);">.</span>data
+        message <span style="color:rgb(233,174,126);">=</span> <span style="color:rgb(227,234,242);">{</span>
+            <span style="color:rgb(145,208,118);">"type"</span><span style="color:rgb(227,234,242);">:</span> <span style="color:rgb(145,208,118);">"tick"</span><span style="color:rgb(227,234,242);">,</span>
+            <span style="color:rgb(145,208,118);">"data"</span><span style="color:rgb(227,234,242);">:</span> <span style="color:rgb(227,234,242);">{</span>
+                <span style="color:rgb(145,208,118);">"symbol"</span><span style="color:rgb(227,234,242);">:</span> tick<span style="color:rgb(227,234,242);">.</span>symbol<span style="color:rgb(227,234,242);">,</span>
+                <span style="color:rgb(145,208,118);">"exchange"</span><span style="color:rgb(227,234,242);">:</span> tick<span style="color:rgb(227,234,242);">.</span>exchange<span style="color:rgb(227,234,242);">,</span>
+                <span style="color:rgb(145,208,118);">"datetime"</span><span style="color:rgb(227,234,242);">:</span> tick<span style="color:rgb(227,234,242);">.</span>datetime<span style="color:rgb(227,234,242);">.</span>isoformat<span style="color:rgb(227,234,242);">()</span> <span style="color:rgb(233,174,126);">if</span> tick<span style="color:rgb(227,234,242);">.</span>datetime <span style="color:rgb(233,174,126);">else</span> <span style="color:rgb(230,211,122);">None</span><span style="color:rgb(227,234,242);">,</span>
+                <span style="color:rgb(145,208,118);">"name"</span><span style="color:rgb(227,234,242);">:</span> tick<span style="color:rgb(227,234,242);">.</span>name<span style="color:rgb(227,234,242);">,</span>
+                <span style="color:rgb(145,208,118);">"volume"</span><span style="color:rgb(227,234,242);">:</span> tick<span style="color:rgb(227,234,242);">.</span>volume<span style="color:rgb(227,234,242);">,</span>
+                <span style="color:rgb(145,208,118);">"last_price"</span><span style="color:rgb(227,234,242);">:</span> tick<span style="color:rgb(227,234,242);">.</span>last_price<span style="color:rgb(227,234,242);">,</span>
+                <span style="color:rgb(145,208,118);">"last_volume"</span><span style="color:rgb(227,234,242);">:</span> tick<span style="color:rgb(227,234,242);">.</span>last_volume<span style="color:rgb(227,234,242);">,</span>
+                <span style="color:rgb(145,208,118);">"limit_up"</span><span style="color:rgb(227,234,242);">:</span> tick<span style="color:rgb(227,234,242);">.</span>limit_up<span style="color:rgb(227,234,242);">,</span>
+                <span style="color:rgb(145,208,118);">"limit_down"</span><span style="color:rgb(227,234,242);">:</span> tick<span style="color:rgb(227,234,242);">.</span>limit_down<span style="color:rgb(227,234,242);">,</span>
+                <span style="color:rgb(145,208,118);">"open_price"</span><span style="color:rgb(227,234,242);">:</span> tick<span style="color:rgb(227,234,242);">.</span>open_price<span style="color:rgb(227,234,242);">,</span>
+                <span style="color:rgb(145,208,118);">"high_price"</span><span style="color:rgb(227,234,242);">:</span> tick<span style="color:rgb(227,234,242);">.</span>high_price<span style="color:rgb(227,234,242);">,</span>
+                <span style="color:rgb(145,208,118);">"low_price"</span><span style="color:rgb(227,234,242);">:</span> tick<span style="color:rgb(227,234,242);">.</span>low_price<span style="color:rgb(227,234,242);">,</span>
+                <span style="color:rgb(145,208,118);">"pre_close"</span><span style="color:rgb(227,234,242);">:</span> tick<span style="color:rgb(227,234,242);">.</span>pre_close<span style="color:rgb(227,234,242);">,</span>
+            <span style="color:rgb(227,234,242);">}</span>
+        <span style="color:rgb(227,234,242);">}</span>
+        <span style="color:rgb(141,161,185);"># 在异步上下文中同步调用异步方法</span>
+        asyncio<span style="color:rgb(227,234,242);">.</span>create_task<span style="color:rgb(227,234,242);">(</span>self<span style="color:rgb(227,234,242);">.</span>broadcast<span style="color:rgb(227,234,242);">(</span>json<span style="color:rgb(227,234,242);">.</span>dumps<span style="color:rgb(227,234,242);">(</span>message<span style="color:rgb(227,234,242);">)))</span>
+    
+    <span style="color:rgb(233,174,126);">def</span> <span style="color:rgb(198,153,227);">on_bar</span><span style="color:rgb(227,234,242);">(</span>self<span style="color:rgb(227,234,242);">,</span> event<span style="color:rgb(227,234,242);">):</span>
+        <span style="color:rgb(145,208,118);">"""处理K线数据事件"""</span>
+        bar<span style="color:rgb(227,234,242);">:</span> BarData <span style="color:rgb(233,174,126);">=</span> event<span style="color:rgb(227,234,242);">.</span>data
+        message <span style="color:rgb(233,174,126);">=</span> <span style="color:rgb(227,234,242);">{</span>
+            <span style="color:rgb(145,208,118);">"type"</span><span style="color:rgb(227,234,242);">:</span> <span style="color:rgb(145,208,118);">"bar"</span><span style="color:rgb(227,234,242);">,</span>
+            <span style="color:rgb(145,208,118);">"data"</span><span style="color:rgb(227,234,242);">:</span> <span style="color:rgb(227,234,242);">{</span>
+                <span style="color:rgb(145,208,118);">"symbol"</span><span style="color:rgb(227,234,242);">:</span> bar<span style="color:rgb(227,234,242);">.</span>symbol<span style="color:rgb(227,234,242);">,</span>
+                <span style="color:rgb(145,208,118);">"exchange"</span><span style="color:rgb(227,234,242);">:</span> bar<span style="color:rgb(227,234,242);">.</span>exchange<span style="color:rgb(227,234,242);">,</span>
+                <span style="color:rgb(145,208,118);">"datetime"</span><span style="color:rgb(227,234,242);">:</span> bar<span style="color:rgb(227,234,242);">.</span>datetime<span style="color:rgb(227,234,242);">.</span>isoformat<span style="color:rgb(227,234,242);">()</span> <span style="color:rgb(233,174,126);">if</span> bar<span style="color:rgb(227,234,242);">.</span>datetime <span style="color:rgb(233,174,126);">else</span> <span style="color:rgb(230,211,122);">None</span><span style="color:rgb(227,234,242);">,</span>
+                <span style="color:rgb(145,208,118);">"interval"</span><span style="color:rgb(227,234,242);">:</span> bar<span style="color:rgb(227,234,242);">.</span>interval<span style="color:rgb(227,234,242);">.</span>value <span style="color:rgb(233,174,126);">if</span> bar<span style="color:rgb(227,234,242);">.</span>interval <span style="color:rgb(233,174,126);">else</span> <span style="color:rgb(230,211,122);">None</span><span style="color:rgb(227,234,242);">,</span>
+                <span style="color:rgb(145,208,118);">"volume"</span><span style="color:rgb(227,234,242);">:</span> bar<span style="color:rgb(227,234,242);">.</span>volume<span style="color:rgb(227,234,242);">,</span>
+                <span style="color:rgb(145,208,118);">"open_interest"</span><span style="color:rgb(227,234,242);">:</span> bar<span style="color:rgb(227,234,242);">.</span>open_interest<span style="color:rgb(227,234,242);">,</span>
+                <span style="color:rgb(145,208,118);">"open_price"</span><span style="color:rgb(227,234,242);">:</span> bar<span style="color:rgb(227,234,242);">.</span>open_price<span style="color:rgb(227,234,242);">,</span>
+                <span style="color:rgb(145,208,118);">"high_price"</span><span style="color:rgb(227,234,242);">:</span> bar<span style="color:rgb(227,234,242);">.</span>high_price<span style="color:rgb(227,234,242);">,</span>
+                <span style="color:rgb(145,208,118);">"low_price"</span><span style="color:rgb(227,234,242);">:</span> bar<span style="color:rgb(227,234,242);">.</span>low_price<span style="color:rgb(227,234,242);">,</span>
+                <span style="color:rgb(145,208,118);">"close_price"</span><span style="color:rgb(227,234,242);">:</span> bar<span style="color:rgb(227,234,242);">.</span>close_price<span style="color:rgb(227,234,242);">,</span>
+            <span style="color:rgb(227,234,242);">}</span>
+        <span style="color:rgb(227,234,242);">}</span>
+        asyncio<span style="color:rgb(227,234,242);">.</span>create_task<span style="color:rgb(227,234,242);">(</span>self<span style="color:rgb(227,234,242);">.</span>broadcast<span style="color:rgb(227,234,242);">(</span>json<span style="color:rgb(227,234,242);">.</span>dumps<span style="color:rgb(227,234,242);">(</span>message<span style="color:rgb(227,234,242);">)))</span></pre>
+      <svg>
+        <path d="M-5.24537e-07 0C-2.34843e-07 6.62742 5.37258 12 12 12L0 12L-5.24537e-07 0Z"
+        fill="currentColor"></path>
+      </svg>
+      <svg>
+        <path d="M-5.24537e-07 0C-2.34843e-07 6.62742 5.37258 12 12 12L0 12L-5.24537e-07 0Z"
+        fill="currentColor"></path>
+      </svg>
+    </div>
+    <ol start="3">
+      <li data-list-item-id="e1ece259072135f4c517bf9e18d6f6dff">
+        <p style="margin-left:0px;"><span>在</span><code>simulate_data_loading</code><span>函数中，改为触发模拟的vn.py事件：</span>
+        </p>
+      </li>
+    </ol>
+    <div>
+      <div>
+        <div>
+          <div>
+            <div><span style="color:rgb(249,250,251);">python</span>
+            </div>
+          </div>
+        </div>
+      </div><pre><span style="color:rgb(233,174,126);">async</span> <span style="color:rgb(233,174,126);">def</span> <span style="color:rgb(198,153,227);">simulate_data_loading</span><span style="color:rgb(227,234,242);">():</span>
+    <span style="color:rgb(233,174,126);">await</span> asyncio<span style="color:rgb(227,234,242);">.</span>sleep<span style="color:rgb(227,234,242);">(</span><span style="color:rgb(230,211,122);">3</span><span style="color:rgb(227,234,242);">)</span>
+    <span style="color:rgb(233,174,126);">print</span><span style="color:rgb(227,234,242);">(</span><span style="color:rgb(145,208,118);">"开始模拟VN.PY数据事件..."</span><span style="color:rgb(227,234,242);">)</span>
+    
+    <span style="color:rgb(141,161,185);"># 模拟产生一个K线事件（后续可替换为真实数据加载）</span>
+    <span style="color:rgb(233,174,126);">from</span> datetime <span style="color:rgb(233,174,126);">import</span> datetime
+    bar <span style="color:rgb(233,174,126);">=</span> BarData<span style="color:rgb(227,234,242);">(</span>
+        symbol<span style="color:rgb(233,174,126);">=</span><span style="color:rgb(145,208,118);">"000001"</span><span style="color:rgb(227,234,242);">,</span>
+        exchange<span style="color:rgb(233,174,126);">=</span><span style="color:rgb(145,208,118);">"SSE"</span><span style="color:rgb(227,234,242);">,</span>
+        datetime<span style="color:rgb(233,174,126);">=</span>datetime<span style="color:rgb(227,234,242);">.</span>now<span style="color:rgb(227,234,242);">(),</span>
+        interval<span style="color:rgb(233,174,126);">=</span><span style="color:rgb(145,208,118);">"1m"</span><span style="color:rgb(227,234,242);">,</span>
+        open_price<span style="color:rgb(233,174,126);">=</span><span style="color:rgb(230,211,122);">100.0</span><span style="color:rgb(227,234,242);">,</span>
+        high_price<span style="color:rgb(233,174,126);">=</span><span style="color:rgb(230,211,122);">100.5</span><span style="color:rgb(227,234,242);">,</span>
+        low_price<span style="color:rgb(233,174,126);">=</span><span style="color:rgb(230,211,122);">99.5</span><span style="color:rgb(227,234,242);">,</span>
+        close_price<span style="color:rgb(233,174,126);">=</span><span style="color:rgb(230,211,122);">100.2</span><span style="color:rgb(227,234,242);">,</span>
+        volume<span style="color:rgb(233,174,126);">=</span><span style="color:rgb(230,211,122);">10000</span><span style="color:rgb(227,234,242);">,</span>
+        gateway_name<span style="color:rgb(233,174,126);">=</span><span style="color:rgb(145,208,118);">"CTP"</span>
+    <span style="color:rgb(227,234,242);">)</span>
+    
+    <span style="color:rgb(141,161,185);"># 每隔2秒广播一个模拟的K线数据</span>
+    <span style="color:rgb(233,174,126);">while</span> <span style="color:rgb(230,211,122);">True</span><span style="color:rgb(227,234,242);">:</span>
+        bar<span style="color:rgb(227,234,242);">.</span>close_price <span style="color:rgb(233,174,126);">+=</span> <span style="color:rgb(230,211,122);">0.1</span>  <span style="color:rgb(141,161,185);"># 简单模拟价格变化</span>
+        bar<span style="color:rgb(227,234,242);">.</span>datetime <span style="color:rgb(233,174,126);">=</span> datetime<span style="color:rgb(227,234,242);">.</span>now<span style="color:rgb(227,234,242);">()</span>
+        event <span style="color:rgb(233,174,126);">=</span> Event<span style="color:rgb(227,234,242);">(</span><span style="color:rgb(145,208,118);">"EVENT_BAR"</span><span style="color:rgb(227,234,242);">,</span> bar<span style="color:rgb(227,234,242);">)</span>
+        event_engine<span style="color:rgb(227,234,242);">.</span>put<span style="color:rgb(227,234,242);">(</span>event<span style="color:rgb(227,234,242);">)</span>
+        <span style="color:rgb(233,174,126);">await</span> asyncio<span style="color:rgb(227,234,242);">.</span>sleep<span style="color:rgb(227,234,242);">(</span><span style="color:rgb(230,211,122);">2</span><span style="color:rgb(227,234,242);">)</span></pre>
+      <svg>
+        <path d="M-5.24537e-07 0C-2.34843e-07 6.62742 5.37258 12 12 12L0 12L-5.24537e-07 0Z"
+        fill="currentColor"></path>
+      </svg>
+      <svg>
+        <path d="M-5.24537e-07 0C-2.34843e-07 6.62742 5.37258 12 12 12L0 12L-5.24537e-07 0Z"
+        fill="currentColor"></path>
+      </svg>
+    </div>
+    <p style="margin-left:0px;"><span>请提供完整的代码实现。</span>
+    </p>
+    <div>
+      <div>
+        <div>
+          <div>
+            <div><span style="color:rgb(249,250,251);">text</span>
+            </div>
+          </div>
+        </div>
+      </div><pre>#### **第二步：构建前端可视化界面**
+
+**提示词 M3 - 创建Vue应用并集成KLineChart**
+</pre>
+      <svg>
+        <path d="M-5.24537e-07 0C-2.34843e-07 6.62742 5.37258 12 12 12L0 12L-5.24537e-07 0Z"
+        fill="currentColor"></path>
+      </svg>
+      <svg>
+        <path d="M-5.24537e-07 0C-2.34843e-07 6.62742 5.37258 12 12 12L0 12L-5.24537e-07 0Z"
+        fill="currentColor"></path>
+      </svg>
+    </div>
+    <p style="margin-left:0px;"><span>请扮演资深前端工程师，创建前端项目并集成KLineChart。</span>
+    </p>
+    <ol>
+      <li data-list-item-id="e8943d2f9438e36298e7a23ff7400fb73">
+        <p style="margin-left:0px;"><span>在项目根目录下创建前端项目：</span>
+        </p>
+      </li>
+    </ol>
+    <div>
+      <div>
+        <div>
+          <div>
+            <div><span style="color:rgb(249,250,251);">bash</span>
+            </div>
+          </div>
+        </div>
+      </div><pre><span style="color:rgb(198,153,227);">npm</span> create vite@latest frontend -- <span style="color:rgb(108,184,230);">--template</span> vue-ts
+<span style="color:rgb(244,173,244);">cd</span> frontend
+<span style="color:rgb(198,153,227);">npm</span> <span style="color:rgb(198,153,227);">install</span>
+<span style="color:rgb(198,153,227);">npm</span> <span style="color:rgb(198,153,227);">install</span> klinecharts</pre>
+      <svg>
+        <path d="M-5.24537e-07 0C-2.34843e-07 6.62742 5.37258 12 12 12L0 12L-5.24537e-07 0Z"
+        fill="currentColor"></path>
+      </svg>
+      <svg>
+        <path d="M-5.24537e-07 0C-2.34843e-07 6.62742 5.37258 12 12 12L0 12L-5.24537e-07 0Z"
+        fill="currentColor"></path>
+      </svg>
+    </div>
+    <ol start="2">
+      <li data-list-item-id="e91e940b711bcefa676a1608531158800">
+        <p style="margin-left:0px;"><span>创建</span><code>src/components/KLineChart.vue</code><span>：</span>
+        </p>
+      </li>
+    </ol>
+    <div>
+      <div>
+        <div>
+          <div>
+            <div><span style="color:rgb(249,250,251);">vue</span>
+            </div>
+          </div>
+        </div>
+      </div><pre><span style="color:rgb(102,204,204);">&lt;template&gt;</span>
+  <span style="color:rgb(102,204,204);">&lt;div </span><span style="color:rgb(230,211,122);">ref</span><span style="color:rgb(102,204,204);">="</span><span style="color:rgb(145,208,118);">chartContainer</span><span style="color:rgb(102,204,204);">" </span><span style="color:rgb(230,211,122);">class</span><span style="color:rgb(102,204,204);">="</span><span style="color:rgb(145,208,118);">chart-container</span><span style="color:rgb(102,204,204);">"&gt;&lt;/div&gt;</span>
+<span style="color:rgb(102,204,204);">&lt;/template&gt;</span>
+
+<span style="color:rgb(102,204,204);">&lt;script </span><span style="color:rgb(230,211,122);">setup</span><span style="color:rgb(102,204,204);"> </span><span style="color:rgb(230,211,122);">lang</span><span style="color:rgb(102,204,204);">="</span><span style="color:rgb(145,208,118);">ts</span><span style="color:rgb(102,204,204);">"&gt;</span><span>
+</span><span style="color:rgb(233,174,126);"><span>import</span></span><span> </span><span style="color:rgb(227,234,242);"><span>{</span></span><span> onMounted</span><span style="color:rgb(227,234,242);"><span>,</span></span><span> onUnmounted</span><span style="color:rgb(227,234,242);"><span>,</span></span><span> ref </span><span style="color:rgb(227,234,242);"><span>}</span></span><span> </span><span style="color:rgb(233,174,126);"><span>from</span></span><span> </span><span style="color:rgb(145,208,118);"><span>'vue'</span></span><span style="color:rgb(227,234,242);"><span>;</span></span><span>
+</span><span style="color:rgb(233,174,126);"><span>import</span></span><span> </span><span style="color:rgb(227,234,242);"><span>{</span></span><span> init</span><span style="color:rgb(227,234,242);"><span>,</span></span><span> dispose </span><span style="color:rgb(227,234,242);"><span>}</span></span><span> </span><span style="color:rgb(233,174,126);"><span>from</span></span><span> </span><span style="color:rgb(145,208,118);"><span>'klinecharts'</span></span><span style="color:rgb(227,234,242);"><span>;</span></span><span>
+
+</span><span style="color:rgb(233,174,126);"><span>const</span></span><span> chartContainer </span><span style="color:rgb(233,174,126);"><span>=</span></span><span> ref</span><span style="color:rgb(233,174,126);"><span>&lt;</span></span><span>HTMLElement </span><span style="color:rgb(233,174,126);"><span>|</span></span><span> </span><span style="color:rgb(233,174,126);"><span>null&gt;</span></span><span style="color:rgb(227,234,242);"><span>(</span></span><span style="color:rgb(233,174,126);"><span>null</span></span><span style="color:rgb(227,234,242);"><span>);</span></span><span>
+</span><span style="color:rgb(233,174,126);"><span>let</span></span><span> </span><span style="color:rgb(108,184,230);"><span>chart</span></span><span style="color:rgb(233,174,126);"><span>:</span></span><span> any </span><span style="color:rgb(233,174,126);"><span>=</span></span><span> </span><span style="color:rgb(233,174,126);"><span>null</span></span><span style="color:rgb(227,234,242);"><span>;</span></span><span>
+</span><span style="color:rgb(233,174,126);"><span>let</span></span><span> </span><span style="color:rgb(108,184,230);"><span>ws</span></span><span style="color:rgb(233,174,126);"><span>:</span></span><span> WebSocket </span><span style="color:rgb(233,174,126);"><span>|</span></span><span> </span><span style="color:rgb(233,174,126);"><span>null</span></span><span> </span><span style="color:rgb(233,174,126);"><span>=</span></span><span> </span><span style="color:rgb(233,174,126);"><span>null</span></span><span style="color:rgb(227,234,242);"><span>;</span></span><span>
+
+</span><span style="color:rgb(198,153,227);"><span>onMounted</span></span><span style="color:rgb(227,234,242);"><span>(()</span></span><span> </span><span style="color:rgb(233,174,126);"><span>=&gt;</span></span><span> </span><span style="color:rgb(227,234,242);"><span>{</span></span><span>
+  </span><span style="color:rgb(233,174,126);"><span>if</span></span><span> </span><span style="color:rgb(227,234,242);"><span>(</span></span><span style="color:rgb(233,174,126);"><span>!</span></span><span>chartContainer</span><span style="color:rgb(227,234,242);"><span>.</span></span><span>value</span><span style="color:rgb(227,234,242);"><span>)</span></span><span> </span><span style="color:rgb(233,174,126);"><span>return</span></span><span style="color:rgb(227,234,242);"><span>;</span></span><span>
+  
+  </span><span style="color:rgb(141,161,185);"><span>// 初始化图表</span></span><span>
+  chart </span><span style="color:rgb(233,174,126);"><span>=</span></span><span> </span><span style="color:rgb(198,153,227);"><span>init</span></span><span style="color:rgb(227,234,242);"><span>(</span></span><span>chartContainer</span><span style="color:rgb(227,234,242);"><span>.</span></span><span>value</span><span style="color:rgb(227,234,242);"><span>);</span></span><span>
+  chart</span><span style="color:rgb(227,234,242);"><span>.</span></span><span style="color:rgb(198,153,227);"><span>createIndicator</span></span><span style="color:rgb(227,234,242);"><span>(</span></span><span style="color:rgb(145,208,118);"><span>'MA'</span></span><span style="color:rgb(227,234,242);"><span>,</span></span><span> </span><span style="color:rgb(230,211,122);"><span>false</span></span><span style="color:rgb(227,234,242);"><span>,</span></span><span> </span><span style="color:rgb(227,234,242);"><span>{</span></span><span> </span><span style="color:rgb(108,184,230);"><span>id</span></span><span style="color:rgb(233,174,126);"><span>:</span></span><span> </span><span style="color:rgb(145,208,118);"><span>'candle_pane'</span></span><span> </span><span style="color:rgb(227,234,242);"><span>});</span></span><span>
+  
+  </span><span style="color:rgb(141,161,185);"><span>// 连接WebSocket</span></span><span>
+  ws </span><span style="color:rgb(233,174,126);"><span>=</span></span><span> </span><span style="color:rgb(233,174,126);"><span>new</span></span><span> </span><span style="color:rgb(108,184,230);"><span>WebSocket</span></span><span style="color:rgb(227,234,242);"><span>(</span></span><span style="color:rgb(145,208,118);"><span>'ws://localhost:8000/ws'</span></span><span style="color:rgb(227,234,242);"><span>);</span></span><span>
+  
+  ws</span><span style="color:rgb(227,234,242);"><span>.</span></span><span style="color:rgb(198,153,227);"><span>onopen</span></span><span> </span><span style="color:rgb(233,174,126);"><span>=</span></span><span> </span><span style="color:rgb(227,234,242);"><span>()</span></span><span> </span><span style="color:rgb(233,174,126);"><span>=&gt;</span></span><span> </span><span style="color:rgb(227,234,242);"><span>{</span></span><span>
+    console</span><span style="color:rgb(227,234,242);"><span>.</span></span><span style="color:rgb(198,153,227);"><span>log</span></span><span style="color:rgb(227,234,242);"><span>(</span></span><span style="color:rgb(145,208,118);"><span>'Connected to WebSocket server'</span></span><span style="color:rgb(227,234,242);"><span>);</span></span><span>
+  </span><span style="color:rgb(227,234,242);"><span>};</span></span><span>
+  
+  ws</span><span style="color:rgb(227,234,242);"><span>.</span></span><span style="color:rgb(198,153,227);"><span>onmessage</span></span><span> </span><span style="color:rgb(233,174,126);"><span>=</span></span><span> </span><span style="color:rgb(227,234,242);"><span>(</span></span><span style="color:rgb(108,184,230);"><span>event</span></span><span style="color:rgb(227,234,242);"><span>)</span></span><span> </span><span style="color:rgb(233,174,126);"><span>=&gt;</span></span><span> </span><span style="color:rgb(227,234,242);"><span>{</span></span><span>
+    </span><span style="color:rgb(233,174,126);"><span>try</span></span><span> </span><span style="color:rgb(227,234,242);"><span>{</span></span><span>
+      </span><span style="color:rgb(233,174,126);"><span>const</span></span><span> message </span><span style="color:rgb(233,174,126);"><span>=</span></span><span> </span><span style="color:rgb(230,211,122);"><span>JSON</span></span><span style="color:rgb(227,234,242);"><span>.</span></span><span style="color:rgb(198,153,227);"><span>parse</span></span><span style="color:rgb(227,234,242);"><span>(</span></span><span>event</span><span style="color:rgb(227,234,242);"><span>.</span></span><span>data</span><span style="color:rgb(227,234,242);"><span>);</span></span><span>
+      
+      </span><span style="color:rgb(233,174,126);"><span>if</span></span><span> </span><span style="color:rgb(227,234,242);"><span>(</span></span><span>message</span><span style="color:rgb(227,234,242);"><span>.</span></span><span>type </span><span style="color:rgb(233,174,126);"><span>===</span></span><span> </span><span style="color:rgb(145,208,118);"><span>'bar'</span></span><span style="color:rgb(227,234,242);"><span>)</span></span><span> </span><span style="color:rgb(227,234,242);"><span>{</span></span><span>
+        </span><span style="color:rgb(233,174,126);"><span>const</span></span><span> barData </span><span style="color:rgb(233,174,126);"><span>=</span></span><span> message</span><span style="color:rgb(227,234,242);"><span>.</span></span><span>data</span><span style="color:rgb(227,234,242);"><span>;</span></span><span>
+        </span><span style="color:rgb(141,161,185);"><span>// 转换数据格式以匹配KLineChart要求</span></span><span>
+        </span><span style="color:rgb(233,174,126);"><span>const</span></span><span> klineData </span><span style="color:rgb(233,174,126);"><span>=</span></span><span> </span><span style="color:rgb(227,234,242);"><span>{</span></span><span>
+          </span><span style="color:rgb(108,184,230);"><span>timestamp</span></span><span style="color:rgb(233,174,126);"><span>:</span></span><span> </span><span style="color:rgb(233,174,126);"><span>new</span></span><span> </span><span style="color:rgb(108,184,230);"><span>Date</span></span><span style="color:rgb(227,234,242);"><span>(</span></span><span>barData</span><span style="color:rgb(227,234,242);"><span>.</span></span><span>datetime</span><span style="color:rgb(227,234,242);"><span>).</span></span><span style="color:rgb(198,153,227);"><span>getTime</span></span><span style="color:rgb(227,234,242);"><span>(),</span></span><span>
+          </span><span style="color:rgb(108,184,230);"><span>open</span></span><span style="color:rgb(233,174,126);"><span>:</span></span><span> barData</span><span style="color:rgb(227,234,242);"><span>.</span></span><span>open_price</span><span style="color:rgb(227,234,242);"><span>,</span></span><span>
+          </span><span style="color:rgb(108,184,230);"><span>high</span></span><span style="color:rgb(233,174,126);"><span>:</span></span><span> barData</span><span style="color:rgb(227,234,242);"><span>.</span></span><span>high_price</span><span style="color:rgb(227,234,242);"><span>,</span></span><span>
+          </span><span style="color:rgb(108,184,230);"><span>low</span></span><span style="color:rgb(233,174,126);"><span>:</span></span><span> barData</span><span style="color:rgb(227,234,242);"><span>.</span></span><span>low_price</span><span style="color:rgb(227,234,242);"><span>,</span></span><span>
+          </span><span style="color:rgb(108,184,230);"><span>close</span></span><span style="color:rgb(233,174,126);"><span>:</span></span><span> barData</span><span style="color:rgb(227,234,242);"><span>.</span></span><span>close_price</span><span style="color:rgb(227,234,242);"><span>,</span></span><span>
+          </span><span style="color:rgb(108,184,230);"><span>volume</span></span><span style="color:rgb(233,174,126);"><span>:</span></span><span> barData</span><span style="color:rgb(227,234,242);"><span>.</span></span><span>volume
+        </span><span style="color:rgb(227,234,242);"><span>};</span></span><span>
+        
+        </span><span style="color:rgb(141,161,185);"><span>// 更新图表</span></span><span>
+        chart</span><span style="color:rgb(227,234,242);"><span>.</span></span><span style="color:rgb(198,153,227);"><span>updateData</span></span><span style="color:rgb(227,234,242);"><span>(</span></span><span>klineData</span><span style="color:rgb(227,234,242);"><span>);</span></span><span>
+      </span><span style="color:rgb(227,234,242);"><span>}</span></span><span>
+    </span><span style="color:rgb(227,234,242);"><span>}</span></span><span> </span><span style="color:rgb(233,174,126);"><span>catch</span></span><span> </span><span style="color:rgb(227,234,242);"><span>(</span></span><span>error</span><span style="color:rgb(227,234,242);"><span>)</span></span><span> </span><span style="color:rgb(227,234,242);"><span>{</span></span><span>
+      console</span><span style="color:rgb(227,234,242);"><span>.</span></span><span style="color:rgb(198,153,227);"><span>error</span></span><span style="color:rgb(227,234,242);"><span>(</span></span><span style="color:rgb(145,208,118);"><span>'Error processing message:'</span></span><span style="color:rgb(227,234,242);"><span>,</span></span><span> error</span><span style="color:rgb(227,234,242);"><span>);</span></span><span>
+    </span><span style="color:rgb(227,234,242);"><span>}</span></span><span>
+  </span><span style="color:rgb(227,234,242);"><span>};</span></span><span>
+  
+  ws</span><span style="color:rgb(227,234,242);"><span>.</span></span><span style="color:rgb(198,153,227);"><span>onerror</span></span><span> </span><span style="color:rgb(233,174,126);"><span>=</span></span><span> </span><span style="color:rgb(227,234,242);"><span>(</span></span><span style="color:rgb(108,184,230);"><span>error</span></span><span style="color:rgb(227,234,242);"><span>)</span></span><span> </span><span style="color:rgb(233,174,126);"><span>=&gt;</span></span><span> </span><span style="color:rgb(227,234,242);"><span>{</span></span><span>
+    console</span><span style="color:rgb(227,234,242);"><span>.</span></span><span style="color:rgb(198,153,227);"><span>error</span></span><span style="color:rgb(227,234,242);"><span>(</span></span><span style="color:rgb(145,208,118);"><span>'WebSocket error:'</span></span><span style="color:rgb(227,234,242);"><span>,</span></span><span> error</span><span style="color:rgb(227,234,242);"><span>);</span></span><span>
+  </span><span style="color:rgb(227,234,242);"><span>};</span></span><span>
+  
+  ws</span><span style="color:rgb(227,234,242);"><span>.</span></span><span style="color:rgb(198,153,227);"><span>onclose</span></span><span> </span><span style="color:rgb(233,174,126);"><span>=</span></span><span> </span><span style="color:rgb(227,234,242);"><span>()</span></span><span> </span><span style="color:rgb(233,174,126);"><span>=&gt;</span></span><span> </span><span style="color:rgb(227,234,242);"><span>{</span></span><span>
+    console</span><span style="color:rgb(227,234,242);"><span>.</span></span><span style="color:rgb(198,153,227);"><span>log</span></span><span style="color:rgb(227,234,242);"><span>(</span></span><span style="color:rgb(145,208,118);"><span>'WebSocket connection closed'</span></span><span style="color:rgb(227,234,242);"><span>);</span></span><span>
+  </span><span style="color:rgb(227,234,242);"><span>};</span></span><span>
+</span><span style="color:rgb(227,234,242);"><span>});</span></span><span>
+
+</span><span style="color:rgb(198,153,227);"><span>onUnmounted</span></span><span style="color:rgb(227,234,242);"><span>(()</span></span><span> </span><span style="color:rgb(233,174,126);"><span>=&gt;</span></span><span> </span><span style="color:rgb(227,234,242);"><span>{</span></span><span>
+  </span><span style="color:rgb(233,174,126);"><span>if</span></span><span> </span><span style="color:rgb(227,234,242);"><span>(</span></span><span>chart</span><span style="color:rgb(227,234,242);"><span>)</span></span><span> </span><span style="color:rgb(227,234,242);"><span>{</span></span><span>
+    </span><span style="color:rgb(198,153,227);"><span>dispose</span></span><span style="color:rgb(227,234,242);"><span>(</span></span><span>chartContainer</span><span style="color:rgb(227,234,242);"><span>.</span></span><span>value</span><span style="color:rgb(227,234,242);"><span>);</span></span><span>
+  </span><span style="color:rgb(227,234,242);"><span>}</span></span><span>
+  </span><span style="color:rgb(233,174,126);"><span>if</span></span><span> </span><span style="color:rgb(227,234,242);"><span>(</span></span><span>ws</span><span style="color:rgb(227,234,242);"><span>)</span></span><span> </span><span style="color:rgb(227,234,242);"><span>{</span></span><span>
+    ws</span><span style="color:rgb(227,234,242);"><span>.</span></span><span style="color:rgb(198,153,227);"><span>close</span></span><span style="color:rgb(227,234,242);"><span>();</span></span><span>
+  </span><span style="color:rgb(227,234,242);"><span>}</span></span><span>
+</span><span style="color:rgb(227,234,242);"><span>});</span></span><span>
+</span><span style="color:rgb(102,204,204);">&lt;/script&gt;</span>
+
+<span style="color:rgb(102,204,204);">&lt;style </span><span style="color:rgb(230,211,122);">scoped</span><span style="color:rgb(102,204,204);">&gt;</span>
+.chart-container {
+  width: 100%;
+  height: 600px;
+}
+<span style="color:rgb(102,204,204);">&lt;/style&gt;</span></pre>
+      <svg>
+        <path d="M-5.24537e-07 0C-2.34843e-07 6.62742 5.37258 12 12 12L0 12L-5.24537e-07 0Z"
+        fill="currentColor"></path>
+      </svg>
+      <svg>
+        <path d="M-5.24537e-07 0C-2.34843e-07 6.62742 5.37258 12 12 12L0 12L-5.24537e-07 0Z"
+        fill="currentColor"></path>
+      </svg>
+    </div>
+    <ol start="3">
+      <li data-list-item-id="eb69a9d78de975eed7d4eb3fd122b69cf">
+        <p style="margin-left:0px;"><span>修改</span><code>src/App.vue</code><span>：</span>
+        </p>
+      </li>
+    </ol>
+    <div>
+      <div>
+        <div>
+          <div>
+            <div><span style="color:rgb(249,250,251);">vue</span>
+            </div>
+          </div>
+        </div>
+      </div><pre><span style="color:rgb(102,204,204);">&lt;template&gt;</span>
+  <span style="color:rgb(102,204,204);">&lt;div </span><span style="color:rgb(230,211,122);">id</span><span style="color:rgb(102,204,204);">="</span><span style="color:rgb(145,208,118);">app</span><span style="color:rgb(102,204,204);">"&gt;</span>
+    <span style="color:rgb(102,204,204);">&lt;h1&gt;</span>VegaTrader Core MVP<span style="color:rgb(102,204,204);">&lt;/h1&gt;</span>
+    <span style="color:rgb(102,204,204);">&lt;KLineChart /&gt;</span>
+  <span style="color:rgb(102,204,204);">&lt;/div&gt;</span>
+<span style="color:rgb(102,204,204);">&lt;/template&gt;</span>
+
+<span style="color:rgb(102,204,204);">&lt;script </span><span style="color:rgb(230,211,122);">setup</span><span style="color:rgb(102,204,204);"> </span><span style="color:rgb(230,211,122);">lang</span><span style="color:rgb(102,204,204);">="</span><span style="color:rgb(145,208,118);">ts</span><span style="color:rgb(102,204,204);">"&gt;</span><span>
+</span><span style="color:rgb(233,174,126);"><span>import</span></span><span> KLineChart </span><span style="color:rgb(233,174,126);"><span>from</span></span><span> </span><span style="color:rgb(145,208,118);"><span>'./components/KLineChart.vue'</span></span><span style="color:rgb(227,234,242);"><span>;</span></span><span>
+</span><span style="color:rgb(102,204,204);">&lt;/script&gt;</span>
+
+<span style="color:rgb(102,204,204);">&lt;style&gt;</span>
+#app {
+  padding: 20px;
+}
+<span style="color:rgb(102,204,204);">&lt;/style&gt;</span></pre>
+      <svg>
+        <path d="M-5.24537e-07 0C-2.34843e-07 6.62742 5.37258 12 12 12L0 12L-5.24537e-07 0Z"
+        fill="currentColor"></path>
+      </svg>
+      <svg>
+        <path d="M-5.24537e-07 0C-2.34843e-07 6.62742 5.37258 12 12 12L0 12L-5.24537e-07 0Z"
+        fill="currentColor"></path>
+      </svg>
+    </div>
+    <p style="margin-left:0px;"><span>请提供完整的代码实现。</span>
+    </p>
+    <div>
+      <div>
+        <div>
+          <div>
+            <div><span style="color:rgb(249,250,251);">text</span>
+            </div>
+          </div>
+        </div>
+      </div><pre>#### **第三步：启动与验证**
+
+**操作**: 分别启动前后端服务，进行验证。
+
+1.  **启动后端**:
+    ```bash
+    cd backend
+    uvicorn main:app --reload --host 0.0.0.0 --port 8000
+    ```
+    访问 `http://localhost:800/health` 测试API。
+
+2.  **启动前端**:
+    ```bash
+    cd frontend
+    npm run dev
+    ```
+    访问 `http://localhost:5173`，打开浏览器开发者工具，查看WebSocket连接和数据接收情况。
+
+3.  **验证成功**：观察浏览器页面，应该能看到KLineChart图表，并且每隔2秒会更新一根新的K线，标志着vn.py到KLineChart的完整数据流已经打通！
+</pre>
+    </div>
+    <p>
+      <br>&nbsp;</p>
+  </body>
+
+</html>
