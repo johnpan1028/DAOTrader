@@ -85,3 +85,6 @@ log/
 !tsconfig.json
 !tsconfig.node.json
 !vite.config.ts
+
+# VNPY submodule (exclude from version control)
+vnpy/
