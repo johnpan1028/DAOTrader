@@ -2,4 +2,32 @@ fastapi>=0.104.0
 uvicorn[standard]>=0.24.0
 websockets>=12.0
 
+# VNPY相关依赖
+vnpy>=3.9.0
+vnpy-ctp>=6.6.9
+vnpy-ctastrategy>=1.0.5
+vnpy-ctabacktester>=1.0.3
+vnpy-datamanager>=1.0.2
+vnpy-riskmanager>=1.0.3
+vnpy-portfoliomanager>=1.0.1
+
+# 数据处理和分析
+numpy>=1.24.0
+pandas>=2.0.0
+scipy>=1.10.0
+
+# 技术指标计算
+TA-Lib>=0.4.25
+
+# 数据源
+akshare>=1.11.0
+
+# 数据库
+sqlalchemy>=2.0.0
+
+# 其他工具
+python-dateutil>=2.8.0
+requests>=2.31.0
+loguru>=0.7.0
+
 

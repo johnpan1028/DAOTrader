@@ -10,9 +10,64 @@ from datetime import datetime, timedelta
 import random
 
 # VN.PY相关导入
-from vnpy.event import EventEngine, Event
-from vnpy.trader.object import BarData, TickData
-from vnpy.trader.constant import Exchange, Interval
+try:
+    from vnpy.event import EventEngine, Event
+    from vnpy.trader.object import BarData, TickData
+    from vnpy.trader.constant import Exchange, Interval
+except Exception:
+    # 简化降级版本，便于本地无 vn.py 仍可运行
+    class Event:
+        def __init__(self, type_, data):
+            self.type = type_
+            self.data = data
+
+    class EventEngine:
+        def __init__(self):
+            self._handlers = {}
+            self._running = False
+
+        def register(self, type_, handler):
+            self._handlers.setdefault(type_, []).append(handler)
+
+        def start(self):
+            self._running = True
+
+        def stop(self):
+            self._running = False
+
+        def put(self, event: Event):
+            for h in self._handlers.get(event.type, []):
+                try:
+                    h(event)
+                except Exception:
+                    pass
+
+    class Exchange:
+        SSE = type('E', (), {'value': 'SSE'})()
+
+    class Interval:
+        MINUTE = type('I', (), {'value': '1m'})()
+
+    class TickData:
+        def __init__(self, **kwargs):
+            for k, v in kwargs.items():
+                setattr(self, k, v)
+
+    class BarData:
+        def __init__(self, **kwargs):
+            for k, v in kwargs.items():
+                setattr(self, k, v)
+
+# 数据服务相关导入
+from data_service.akshare_client import AKShareClient
+from data_service.data_converter import DataConverter
+from data_service.vnpy_database import VnpyDatabaseManager
+# from models.bar_data import DataDownloadRequest, DataStatusResponse, BarDataModel
+
+# 回测服务相关导入
+from backtest_service.backtest_engine import BacktestManager
+from backtest_service.strategy_manager import StrategyManager
+from backtest_service.indicators import TechnicalIndicators
 
 # --- 1. WebSocket连接管理器 ---
 class ConnectionManager:
@@ -44,6 +99,12 @@ class ConnectionManager:
 # --- 2. 全局变量 ---
 manager = None
 event_engine = None
+akshare_client = None
+data_converter = None
+db_manager = None
+backtest_manager = None
+strategy_manager = None
+technical_indicators = None
 
 # --- 3. VN.PY事件处理器 ---
 class VnPyDataHandler:
@@ -150,8 +211,23 @@ async def simulate_data_loading():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # 启动时
-    global manager, event_engine
+    global manager, event_engine, akshare_client, data_converter, db_manager, backtest_manager, strategy_manager, technical_indicators
     manager = ConnectionManager()
+    
+    # 初始化数据服务组件
+    akshare_client = AKShareClient()
+    data_converter = DataConverter()
+    db_manager = VnpyDatabaseManager()
+    
+    # 初始化回测服务组件
+    backtest_manager = BacktestManager()
+    strategy_manager = StrategyManager()
+    technical_indicators = TechnicalIndicators()
+    
+    # 数据库已在初始化时自动创建表结构
+        # await db_manager.initialize_database()
+    print("数据库初始化成功。")
+    print("回测服务组件初始化成功。")
     
     # 初始化vn.py事件引擎
     event_engine = EventEngine()
@@ -200,7 +276,383 @@ async def root():
 async def health():
     return {"status": "ok"}
 
-# --- 8. WebSocket端点 ---
+# --- 8. 数据管理API ---
+@app.post("/api/data/download")
+async def download_data(request: dict):
+    """下载股票数据"""
+    try:
+        print(f"DEBUG: 接收到的请求参数: {request}")
+        print(f"DEBUG: period参数值: {request['period']}")
+        
+        # 使用AKShare客户端获取数据
+        raw_data = await akshare_client.get_stock_data(
+            symbol=request["symbol"],
+            period=request["period"],
+            start_date=request.get("start_date"),
+            end_date=request.get("end_date")
+        )
+        
+        if raw_data is None or len(raw_data) == 0:
+            return {"success": False, "message": "未获取到数据"}
+        
+        # 转换数据格式
+        bar_data_list = data_converter.akshare_to_vnpy_bars(
+            raw_data, 
+            symbol=request["symbol"],
+            exchange=request["exchange"],
+            interval=request["period"]
+        )
+        
+        # 保存到数据库
+        success = db_manager.save_bar_data(bar_data_list)
+        saved_count = len(bar_data_list) if success else 0
+        
+        return {
+            "success": True,
+            "message": f"成功下载并保存 {saved_count} 条数据",
+            "count": saved_count
+        }
+    except Exception as e:
+        return {"success": False, "message": f"下载失败: {str(e)}"}
+
+@app.get("/api/data/query")
+async def query_data(
+    symbol: str,
+    exchange: str = "SSE",
+    interval: str = "1m",
+    start: str = None,
+    end: str = None,
+    limit: int = 1000
+):
+    """查询K线数据"""
+    try:
+        # 转换参数
+        from vnpy.trader.constant import Exchange, Interval
+        exchange_obj = data_converter._get_vnpy_exchange(exchange)
+        interval_obj = data_converter._get_vnpy_interval(interval)
+        
+        # 解析时间参数
+        start_dt = datetime.fromisoformat(start) if start else None
+        end_dt = datetime.fromisoformat(end) if end else None
+        
+        # 查询数据
+        bar_data_list = db_manager.load_bar_data(
+            symbol=symbol,
+            exchange=exchange_obj,
+            interval=interval_obj,
+            start=start_dt,
+            end=end_dt
+        )
+        
+        # 限制返回数量
+        if len(bar_data_list) > limit:
+            bar_data_list = bar_data_list[-limit:]
+        
+        # 转换为字典格式
+        result = data_converter.vnpy_to_dict_list(bar_data_list)
+        
+        return {
+            "success": True,
+            "data": result,
+            "count": len(result)
+        }
+    except Exception as e:
+        return {"success": False, "message": f"查询失败: {str(e)}"}
+
+@app.get("/api/data/overview")
+async def get_data_overview():
+    """获取数据概览"""
+    try:
+        overview = db_manager.get_data_overview()
+        return {"success": True, "data": overview}
+    except Exception as e:
+        return {"success": False, "message": f"获取概览失败: {str(e)}"}
+
+@app.delete("/api/data/delete")
+async def delete_data(
+    symbol: str,
+    exchange: str = "SSE",
+    interval: str = "1m"
+):
+    """删除指定合约的数据"""
+    try:
+        from vnpy.trader.constant import Exchange, Interval
+        exchange_obj = data_converter._get_vnpy_exchange(exchange)
+        interval_obj = data_converter._get_vnpy_interval(interval)
+        
+        deleted_count = db_manager.delete_bar_data(
+            symbol=symbol,
+            exchange=exchange_obj,
+            interval=interval_obj
+        )
+        
+        return {
+            "success": True,
+            "message": f"成功删除 {deleted_count} 条数据",
+            "count": deleted_count
+        }
+    except Exception as e:
+        return {"success": False, "message": f"删除失败: {str(e)}"}
+
+@app.get("/api/data/symbols")
+async def get_supported_symbols():
+    """获取支持的股票代码列表"""
+    try:
+        symbols = await akshare_client.get_supported_symbols()
+        return {"success": True, "data": symbols}
+    except Exception as e:
+        return {"success": False, "message": f"获取失败: {str(e)}"}
+
+@app.get("/api/data/status")
+async def get_data_status(symbol: str, exchange: str = "SSE", interval: str = "1m"):
+    """获取数据状态"""
+    try:
+        from vnpy.trader.constant import Exchange, Interval
+        exchange_obj = data_converter._get_vnpy_exchange(exchange)
+        interval_obj = data_converter._get_vnpy_interval(interval)
+        
+        count = db_manager.get_bar_count(
+            symbol=symbol,
+            exchange=exchange_obj,
+            interval=interval_obj
+        )
+        
+        latest_bar = db_manager.get_newest_bar_data(
+            symbol=symbol,
+            exchange=exchange_obj,
+            interval=interval_obj
+        )
+        
+        return {
+            "success": True,
+            "data": {
+                "symbol": symbol,
+                "exchange": exchange,
+                "interval": interval,
+                "count": count,
+                "latest_datetime": latest_bar.datetime if latest_bar else None,
+                "has_data": count > 0
+            }
+        }
+    except Exception as e:
+        return {"success": False, "message": f"获取状态失败: {str(e)}"}
+
+# --- 9. 回测管理API ---
+@app.get("/api/backtest/strategies")
+async def get_strategies():
+    """获取可用策略列表"""
+    try:
+        strategies = strategy_manager.get_all_strategies()
+        return {"success": True, "data": strategies}
+    except Exception as e:
+        return {"success": False, "message": f"获取策略列表失败: {str(e)}"}
+
+@app.get("/api/backtest/strategy/{strategy_name}")
+async def get_strategy_info(strategy_name: str):
+    """获取策略详细信息"""
+    try:
+        strategy_info = strategy_manager.get_strategy_info(strategy_name)
+        if strategy_info:
+            return {"success": True, "data": strategy_info}
+        else:
+            return {"success": False, "message": "策略不存在"}
+    except Exception as e:
+        return {"success": False, "message": f"获取策略信息失败: {str(e)}"}
+
+@app.post("/api/backtest/run")
+async def run_backtest(request: dict):
+    """运行回测"""
+    try:
+        # 验证请求参数
+        required_fields = ['strategy_name', 'symbol', 'exchange', 'interval', 'start_date', 'end_date']
+        for field in required_fields:
+            if field not in request:
+                return {"success": False, "message": f"缺少必要参数: {field}"}
+        
+        # 验证策略是否存在
+        if not strategy_manager.has_strategy(request['strategy_name']):
+            return {"success": False, "message": "策略不存在"}
+        
+        # 验证策略参数
+        setting = request.get('setting', {})
+        validation_result = strategy_manager.validate_strategy_params(
+            request['strategy_name'], setting
+        )
+        if not validation_result['valid']:
+            return {"success": False, "message": f"策略参数验证失败: {validation_result['message']}"}
+        
+        # 从数据库加载历史数据
+        from vnpy.trader.constant import Exchange, Interval
+        exchange_obj = data_converter._get_vnpy_exchange(request['exchange'])
+        interval_obj = data_converter._get_vnpy_interval(request['interval'])
+        
+        start_dt = datetime.fromisoformat(request['start_date'])
+        end_dt = datetime.fromisoformat(request['end_date'])
+        
+        bar_data_list = db_manager.load_bar_data(
+            symbol=request['symbol'],
+            exchange=exchange_obj,
+            interval=interval_obj,
+            start=start_dt,
+            end=end_dt
+        )
+        
+        if not bar_data_list:
+            return {"success": False, "message": "未找到历史数据，请先下载数据"}
+        
+        # 运行回测
+        result = backtest_manager.run_backtest(
+            strategy_name=request['strategy_name'],
+            bar_data=bar_data_list,
+            setting=setting,
+            capital=request.get('capital', 100000),
+            commission=request.get('commission', 0.0003),
+            slippage=request.get('slippage', 0.0001)
+        )
+        
+        return {
+            "success": True,
+            "message": "�ز����",
+            "data": result
+        }
+        
+        if result['success']:
+            return {
+                "success": True,
+                "message": "回测完成",
+                "data": result['data']
+            }
+        else:
+            return {"success": False, "message": result['message']}
+    
+    except Exception as e:
+        return {"success": False, "message": f"回测运行失败: {str(e)}"}
+
+@app.get("/api/backtest/results")
+async def get_backtest_results(limit: int = 10):
+    """获取回测结果列表"""
+    try:
+        results = backtest_manager.get_backtest_history(limit=limit)
+        return {"success": True, "data": results}
+    except Exception as e:
+        return {"success": False, "message": f"获取回测结果失败: {str(e)}"}
+
+@app.get("/api/backtest/result/{result_id}")
+async def get_backtest_result(result_id: str):
+    """获取单个回测结果详情"""
+    try:
+        result = backtest_manager.get_backtest_result(result_id)
+        if result:
+            return {"success": True, "data": result}
+        else:
+            return {"success": False, "message": "回测结果不存在"}
+    except Exception as e:
+        return {"success": False, "message": f"获取回测结果失败: {str(e)}"}
+
+@app.delete("/api/backtest/result/{result_id}")
+async def delete_backtest_result(result_id: str):
+    """删除回测结果"""
+    try:
+        success = backtest_manager.delete_backtest_result(result_id)
+        if success:
+            return {"success": True, "message": "删除成功"}
+        else:
+            return {"success": False, "message": "回测结果不存在"}
+    except Exception as e:
+        return {"success": False, "message": f"删除失败: {str(e)}"}
+
+# --- 10. 技术指标API ---
+@app.get("/api/indicators/supported")
+async def get_supported_indicators():
+    """获取支持的技术指标列表"""
+    try:
+        indicators = technical_indicators.get_supported_indicators()
+        return {"success": True, "data": indicators}
+    except Exception as e:
+        return {"success": False, "message": f"获取指标列表失败: {str(e)}"}
+
+@app.post("/api/indicators/calculate")
+async def calculate_indicator(request: dict):
+    """计算技术指标"""
+    try:
+        # 验证请求参数
+        required_fields = ['symbol', 'exchange', 'interval', 'indicator']
+        for field in required_fields:
+            if field not in request:
+                return {"success": False, "message": f"缺少必要参数: {field}"}
+        
+        # 从数据库加载数据
+        from vnpy.trader.constant import Exchange, Interval
+        exchange_obj = data_converter._get_vnpy_exchange(request['exchange'])
+        interval_obj = data_converter._get_vnpy_interval(request['interval'])
+        
+        start_dt = datetime.fromisoformat(request['start_date']) if request.get('start_date') else None
+        end_dt = datetime.fromisoformat(request['end_date']) if request.get('end_date') else None
+        
+        bar_data_list = db_manager.load_bar_data(
+            symbol=request['symbol'],
+            exchange=exchange_obj,
+            interval=interval_obj,
+            start=start_dt,
+            end=end_dt
+        )
+        
+        if not bar_data_list:
+            return {"success": False, "message": "未找到历史数据"}
+        
+        # 计算指标
+        params = request.get('params', {})
+        result = technical_indicators.calculate_from_bars(
+            bar_data_list, request['indicator'], **params
+        )
+        
+        if 'error' in result:
+            return {"success": False, "message": result['error']}
+        else:
+            return {"success": True, "data": result}
+    
+    except Exception as e:
+        return {"success": False, "message": f"计算指标失败: {str(e)}"}
+
+@app.post("/api/indicators/batch")
+async def calculate_batch_indicators(request: dict):
+    """批量计算技术指标"""
+    try:
+        # 验证请求参数
+        required_fields = ['symbol', 'exchange', 'interval', 'indicators']
+        for field in required_fields:
+            if field not in request:
+                return {"success": False, "message": f"缺少必要参数: {field}"}
+        
+        # 从数据库加载数据
+        from vnpy.trader.constant import Exchange, Interval
+        exchange_obj = data_converter._get_vnpy_exchange(request['exchange'])
+        interval_obj = data_converter._get_vnpy_interval(request['interval'])
+        
+        start_dt = datetime.fromisoformat(request['start_date']) if request.get('start_date') else None
+        end_dt = datetime.fromisoformat(request['end_date']) if request.get('end_date') else None
+        
+        bar_data_list = db_manager.load_bar_data(
+            symbol=request['symbol'],
+            exchange=exchange_obj,
+            interval=interval_obj,
+            start=start_dt,
+            end=end_dt
+        )
+        
+        if not bar_data_list:
+            return {"success": False, "message": "未找到历史数据"}
+        
+        # 批量计算指标
+        indicators = request['indicators']
+        results = technical_indicators.batch_calculate(bar_data_list, indicators)
+        
+        return {"success": True, "data": results}
+    
+    except Exception as e:
+        return {"success": False, "message": f"批量计算指标失败: {str(e)}"}
+
+# --- 11. WebSocket端点 ---
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
