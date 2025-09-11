@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>前端测试截图查看</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .screenshot {
+            margin-bottom: 30px;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .screenshot h2 {
+            color: #333;
+            margin-top: 0;
+        }
+        .screenshot img {
+            max-width: 100%;
+            height: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .description {
+            margin-bottom: 15px;
+            color: #666;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>DAOTrader 前端测试截图</h1>
+        
+        <div class="screenshot">
+            <h2>1. 初始页面</h2>
+            <div class="description">
+                页面加载完成后的初始状态，显示控制面板和空的K线图容器
+            </div>
+            <img src="frontend_initial.png" alt="初始页面截图">
+        </div>
+        
+        <div class="screenshot">
+            <h2>2. 下载数据后</h2>
+            <div class="description">
+                点击"下载数据"按钮后的页面状态
+            </div>
+            <img src="frontend_after_download.png" alt="下载数据后截图">
+        </div>
+        
+        <div class="screenshot">
+            <h2>3. 加载历史数据后</h2>
+            <div class="description">
+                点击"加载历史数据"按钮后的页面状态，应该显示K线图
+            </div>
+            <img src="frontend_after_load.png" alt="加载历史数据后截图">
+        </div>
+        
+        <div class="screenshot">
+            <h2>测试结果总结</h2>
+            <div class="description">
+                <ul>
+                    <li>✅ 成功连接到后端服务器</li>
+                    <li>✅ 成功接收WebSocket实时数据</li>
+                    <li>✅ 成功下载期货数据</li>
+                    <li>✅ 成功加载232条历史数据</li>
+                    <li>✅ 找到K线图容器，尺寸正常(1146x602)</li>
+                    <li>✅ 找到14个canvas元素，说明图表已渲染</li>
+                    <li>✅ 数据格式转换正确</li>
+                    <li>✅ 历史数据模式切换成功</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

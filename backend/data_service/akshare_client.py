@@ -219,9 +219,11 @@ class AKShareClient:
                 self.logger.warning(f"未获取到期货数据: {symbol}")
                 return df
             
-            # 时间范围过滤
+            # 标准化列名
+            df = self._standardize_columns(df, 'futures')
+            
+            # 时间范围过滤（在标准化后进行）
             if start_date or end_date:
-                df['datetime'] = pd.to_datetime(df['datetime'])
                 if start_date:
                     start_dt = pd.to_datetime(start_date)
                     df = df[df['datetime'] >= start_dt]
@@ -229,14 +231,13 @@ class AKShareClient:
                     end_dt = pd.to_datetime(end_date)
                     df = df[df['datetime'] <= end_dt]
             
-            # 标准化列名
-            df = self._standardize_columns(df, 'futures')
-            
             self.logger.info(f"成功获取期货数据: {symbol}, 数据量: {len(df)}")
             return df
             
         except Exception as e:
+            import traceback
             self.logger.error(f"获取期货数据失败: {symbol}, 错误: {str(e)}")
+            self.logger.error(f"详细错误信息: {traceback.format_exc()}")
             raise e
     
     def _standardize_columns(self, df: pd.DataFrame, data_type: str) -> pd.DataFrame:
@@ -279,19 +280,29 @@ class AKShareClient:
                 }
             elif data_type == 'futures':
                 column_mapping = {
-                    'datetime': 'datetime',
+                    '日期': 'datetime',
+                    '开盘价': 'open',
+                    '收盘价': 'close',
+                    '最高价': 'high',
+                    '最低价': 'low', 
+                    '成交量': 'volume',
+                    '持仓量': 'open_interest',
+                    '成交额': 'turnover',
+                    '动态结算价': 'settlement_price',
+                    'datetime': 'datetime',  # 如果已经有datetime列
                     'open': 'open',
                     'close': 'close',
                     'high': 'high',
-                    'low': 'low', 
-                    'volume': 'volume',
-                    'turnover': 'turnover'
+                    'low': 'low',
+                    'volume': 'volume'
                 }
             else:
                 return df
             
             # 重命名列
+            self.logger.debug(f"重命名前的列名: {df.columns.tolist()}")
             df = df.rename(columns=column_mapping)
+            self.logger.debug(f"重命名后的列名: {df.columns.tolist()}")
             
             # 确保必要列存在
             required_columns = ['datetime', 'open', 'high', 'low', 'close', 'volume']
@@ -305,7 +316,11 @@ class AKShareClient:
                         self.logger.warning(f"缺少必要列: {col}")
             
             # 数据类型转换
-            df['datetime'] = pd.to_datetime(df['datetime'])
+            if 'datetime' in df.columns:
+                df['datetime'] = pd.to_datetime(df['datetime'])
+            else:
+                self.logger.error(f"datetime列不存在，当前列名: {df.columns.tolist()}")
+                raise KeyError('datetime')
             numeric_columns = ['open', 'high', 'low', 'close', 'volume']
             for col in numeric_columns:
                 if col in df.columns:

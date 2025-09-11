@@ -192,8 +192,16 @@ class VnpyDatabaseManager:
             data_to_insert = []
             
             for bar in bars:
-                # 将Pandas Timestamp转换为Python datetime对象
-                datetime_obj = bar.datetime.to_pydatetime() if hasattr(bar.datetime, 'to_pydatetime') else bar.datetime
+                # 处理datetime对象，确保转换为Python datetime
+                if hasattr(bar.datetime, 'to_pydatetime'):
+                    # Pandas Timestamp
+                    datetime_obj = bar.datetime.to_pydatetime()
+                elif hasattr(bar.datetime, 'replace') and hasattr(bar.datetime, 'tzinfo'):
+                    # Python datetime with timezone
+                    datetime_obj = bar.datetime.replace(tzinfo=None) if bar.datetime.tzinfo else bar.datetime
+                else:
+                    # 其他类型，尝试直接使用
+                    datetime_obj = bar.datetime
                 
                 data_to_insert.append((
                     bar.symbol,
@@ -239,6 +247,10 @@ class VnpyDatabaseManager:
             List[BarData]: K线数据列表
         """
         try:
+            # 处理exchange参数，确保是枚举类型
+            if isinstance(exchange, str):
+                exchange = VnpyExchange(exchange)
+            
             self.logger.info(f"加载K线数据: {symbol}.{exchange.value}, {interval.value}")
             
             if self.database:

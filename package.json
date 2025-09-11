@@ -1,0 +1,15 @@
+{
+  "name": "daotrader",
+  "version": "1.0.0",
+  "description": "",
+  "main": "test_frontend.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "playwright": "^1.55.0"
+  }
+}

@@ -3,6 +3,8 @@
 集成VNPY BacktestingEngine，封装回测流程，支持多策略回测，生成回测报告。
 """
 
+import numpy as np
+
 # 尝试不同的VNPY导入路径
 try:
     from vnpy.app.cta_backtester import BacktesterEngine
@@ -178,7 +180,8 @@ class BacktestManager:
                 return {"success": False, "message": "收盘价数据不足"}
 
             # 计算收益与指标（如无 numpy，使用纯 Python）
-            if np is not None:
+            try:
+                import numpy as np
                 arr = np.array(closes, dtype=float)
                 rets = np.diff(arr) / arr[:-1]
                 total_return = float(arr[-1] / arr[0] - 1.0)
@@ -191,7 +194,7 @@ class BacktestManager:
                 sharpe = float((mean / std) * np.sqrt(max(rets.size, 1))) if std > 0 else 0.0
                 total_trades = int((rets != 0).sum())
                 win_rate = float((rets > 0).sum() / rets.size) if rets.size else 0.0
-            else:
+            except ImportError:
                 import math
                 import statistics
                 rets = [

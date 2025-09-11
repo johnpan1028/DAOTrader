@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import asyncio
@@ -314,6 +314,56 @@ async def download_data(request: dict):
         }
     except Exception as e:
         return {"success": False, "message": f"下载失败: {str(e)}"}
+
+@app.post("/api/data/download/futures")
+async def download_futures_data(request: Request):
+    """下载期货数据"""
+    # 解析JSON请求体
+    body = await request.json()
+    try:
+        print(f"DEBUG: 接收到的期货数据请求参数: {body}")
+        
+        # 使用AKShare客户端获取期货数据
+        try:
+            raw_data = await akshare_client.get_futures_data(
+                symbol=body["symbol"],
+                start_date=body.get("start_date"),
+                end_date=body.get("end_date")
+            )
+            print(f"DEBUG: 获取到的原始数据行数: {len(raw_data) if raw_data is not None else 0}")
+            if raw_data is not None and len(raw_data) > 0:
+                print(f"DEBUG: 原始数据列名: {raw_data.columns.tolist()}")
+        except Exception as e:
+            import traceback
+            print(f"ERROR: 获取期货数据时出错: {str(e)}")
+            print(f"ERROR: 详细错误信息: {traceback.format_exc()}")
+            return {"success": False, "message": f"获取期货数据失败: {str(e)}"}
+        
+        if raw_data is None or len(raw_data) == 0:
+            return {"success": False, "message": "未获取到期货数据"}
+        
+        # 转换数据格式 - 期货使用SHFE交易所，日线数据
+        bar_data_list = data_converter.akshare_to_vnpy_bars(
+            raw_data,
+            symbol=body["symbol"],
+            exchange="SHFE",
+            interval="1d"
+        )
+        
+        # 保存到数据库
+        success = db_manager.save_bar_data(bar_data_list)
+        saved_count = len(bar_data_list) if success else 0
+        
+        return {
+            "success": True,
+            "message": f"成功下载并保存期货数据 {saved_count} 条",
+            "count": saved_count
+        }
+    except Exception as e:
+        import traceback
+        print(f"ERROR: 期货数据下载接口出错: {str(e)}")
+        print(f"ERROR: 详细错误信息: {traceback.format_exc()}")
+        return {"success": False, "message": f"下载期货数据失败: {str(e)}"}
 
 @app.get("/api/data/query")
 async def query_data(

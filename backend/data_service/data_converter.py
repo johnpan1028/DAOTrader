@@ -75,8 +75,16 @@ class DataConverter:
             
             for _, row in df.iterrows():
                 try:
-                    # 处理时间
+                    # 处理时间，确保返回Python datetime对象
                     dt = self._parse_datetime(row['datetime'])
+                    
+                    # 如果仍然是pandas Timestamp，强制转换
+                    if hasattr(dt, 'to_pydatetime'):
+                        dt = dt.to_pydatetime()
+                    
+                    # 移除时区信息以避免SQLite绑定问题
+                    if hasattr(dt, 'tzinfo') and dt.tzinfo:
+                        dt = dt.replace(tzinfo=None)
                     
                     # 创建BarData对象
                     bar = BarData(
@@ -291,12 +299,18 @@ class DataConverter:
             elif isinstance(dt, str):
                 # 解析字符串时间
                 dt_obj = pd.to_datetime(dt)
+                # 转换为Python datetime对象
+                if hasattr(dt_obj, 'to_pydatetime'):
+                    dt_obj = dt_obj.to_pydatetime()
                 if dt_obj.tzinfo is None:
                     dt_obj = dt_obj.replace(tzinfo=timezone.utc)
                 return dt_obj
             else:
-                # 其他类型转换
+                # 其他类型转换（如pandas Timestamp）
                 dt_obj = pd.to_datetime(dt)
+                # 转换为Python datetime对象
+                if hasattr(dt_obj, 'to_pydatetime'):
+                    dt_obj = dt_obj.to_pydatetime()
                 if dt_obj.tzinfo is None:
                     dt_obj = dt_obj.replace(tzinfo=timezone.utc)
                 return dt_obj
