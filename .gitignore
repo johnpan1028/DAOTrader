@@ -88,3 +88,30 @@ log/
 
 # VNPY submodule (exclude from version control)
 vnpy/
+
+# Python caches and testing
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Tool caches
+.cache/
+
+# Environment files (do not commit secrets)
+.env
+.env.local
+.env.*
+.envrc
+Pipfile.lock
+
+# SQLite journal files (add to existing DB ignores)
+*.db-shm
+*.db-wal
+*.sqlite-shm
+*.sqlite-wal
+
+# IDE workspace files
+*.code-workspace
