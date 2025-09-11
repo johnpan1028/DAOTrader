@@ -97,6 +97,10 @@ vnpy/
 coverage.xml
 htmlcov/
 
+# Test files (temporary testing scripts)
+test_*.py
+!tests/test_*.py  # Keep formal test files in tests/ directory
+
 # Tool caches
 .cache/
 
