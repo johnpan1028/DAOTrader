@@ -206,14 +206,54 @@ class AKShareClient:
         try:
             self.logger.info(f"获取期货数据: {symbol}, 时间范围: {start_date} - {end_date}")
             
-            # 异步执行数据获取
+            # 尝试多个数据源
+            df = pd.DataFrame()
             loop = asyncio.get_event_loop()
-            df = await loop.run_in_executor(
-                None,
-                self._retry_request,
-                ak.futures_main_sina,
-                symbol
-            )
+            
+            # 处理连续合约代码转换
+            actual_symbol = symbol
+            if symbol.endswith('888'):
+                # 连续合约转换为主力合约 (RB888 -> RB0)
+                actual_symbol = symbol.replace('888', '0')
+                self.logger.info(f"连续合约{symbol}转换为主力合约{actual_symbol}")
+            elif symbol.endswith('000'):
+                # 指数合约转换为主力合约 (RB000 -> RB0)
+                actual_symbol = symbol.replace('000', '0')
+                self.logger.info(f"指数合约{symbol}转换为主力合约{actual_symbol}")
+            
+            # 方法1: 尝试futures_main_sina
+            try:
+                df = await loop.run_in_executor(
+                    None,
+                    self._retry_request,
+                    ak.futures_main_sina,
+                    actual_symbol
+                )
+                self.logger.info(f"futures_main_sina成功获取数据: {len(df)}条 (使用代码: {actual_symbol})")
+            except Exception as e1:
+                self.logger.warning(f"futures_main_sina失败: {str(e1)} (使用代码: {actual_symbol})")
+                
+                # 方法2: 如果是转换后的代码失败，尝试原始代码
+                if actual_symbol != symbol:
+                    try:
+                        self.logger.info(f"尝试使用原始代码: {symbol}")
+                        df = await loop.run_in_executor(
+                            None,
+                            self._retry_request,
+                            ak.futures_main_sina,
+                            symbol
+                        )
+                        self.logger.info(f"使用原始代码成功获取数据: {len(df)}条")
+                    except Exception as e2:
+                        self.logger.warning(f"原始代码也失败: {str(e2)}")
+                        error_msg = f"所有期货数据源都失败了。转换代码错误: {str(e1)}, 原始代码错误: {str(e2)}"
+                        self.logger.error(error_msg)
+                        raise Exception(error_msg)
+                else:
+                    # 如果没有转换，直接抛出错误
+                    error_msg = f"期货数据获取失败: {str(e1)}"
+                    self.logger.error(error_msg)
+                    raise Exception(error_msg)
             
             if len(df) == 0:
                 self.logger.warning(f"未获取到期货数据: {symbol}")

@@ -59,15 +59,19 @@ except Exception:
                 setattr(self, k, v)
 
 # 数据服务相关导入
-from data_service.akshare_client import AKShareClient
-from data_service.data_converter import DataConverter
-from data_service.vnpy_database import VnpyDatabaseManager
-# from models.bar_data import DataDownloadRequest, DataStatusResponse, BarDataModel
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from backend.data_service.akshare_client import AKShareClient
+from backend.data_service.data_converter import DataConverter
+from backend.data_service.vnpy_database import VnpyDatabaseManager
+# from backend.models.bar_data import DataDownloadRequest, DataStatusResponse, BarDataModel
 
 # 回测服务相关导入
-from backtest_service.backtest_engine import BacktestManager
-from backtest_service.strategy_manager import StrategyManager
-from backtest_service.indicators import TechnicalIndicators
+from backend.backtest_service.backtest_engine import BacktestManager
+from backend.backtest_service.strategy_manager import StrategyManager
+from backend.backtest_service.indicators import TechnicalIndicators
 
 # --- 1. WebSocket连接管理器 ---
 class ConnectionManager:
@@ -343,15 +347,22 @@ async def download_futures_data(request: Request):
             return {"success": False, "message": "未获取到期货数据"}
         
         # 转换数据格式 - 期货使用SHFE交易所，日线数据
+        print(f"DEBUG: 开始转换数据格式")
         bar_data_list = data_converter.akshare_to_vnpy_bars(
             raw_data,
             symbol=body["symbol"],
             exchange="SHFE",
             interval="1d"
         )
+        print(f"DEBUG: 转换完成，得到 {len(bar_data_list)} 条BarData")
+        
+        if len(bar_data_list) > 0:
+            print(f"DEBUG: 第一条数据示例: {bar_data_list[0].symbol} {bar_data_list[0].datetime} {bar_data_list[0].close_price}")
         
         # 保存到数据库
+        print(f"DEBUG: 开始保存到数据库")
         success = db_manager.save_bar_data(bar_data_list)
+        print(f"DEBUG: 保存结果: {success}")
         saved_count = len(bar_data_list) if success else 0
         
         return {
@@ -714,5 +725,5 @@ async def websocket_endpoint(websocket: WebSocket):
         manager.disconnect(websocket)
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run(app, host="0.0.0.0", port=8000)
 
