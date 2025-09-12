@@ -1,0 +1,133 @@
+/* TradingView 配色方案全局变量 */
+/* 基于 TradingView 官方深色主题配色 */
+
+:root {
+  /* === 基础背景色 === */
+  --tv-bg-primary: #131722;        /* 主背景色 - 图表区域 */
+  --tv-bg-secondary: #1e222d;      /* 次要背景色 - 面板背景 */
+  --tv-bg-overlay: #2a2e39;        /* 覆盖层背景 - 卡片、输入框等 */
+  --tv-bg-hover: #363a45;          /* 悬停背景色 */
+  
+  /* === 边框颜色 === */
+  --tv-border-primary: #363a45;    /* 主要边框色 */
+  --tv-border-secondary: #434651;  /* 次要边框色 */
+  --tv-border-light: #5d606b;      /* 浅色边框 */
+  
+  /* === 文字颜色 === */
+  --tv-text-primary: #d1d4dc;      /* 主要文字颜色 */
+  --tv-text-secondary: #868993;    /* 次要文字颜色 */
+  --tv-text-disabled: #5d606b;     /* 禁用文字颜色 */
+  --tv-text-inverse: #ffffff;      /* 反色文字（用于按钮等） */
+  
+  /* === 主题色 === */
+  --tv-primary: #2962ff;           /* 主题蓝色 */
+  --tv-primary-hover: #1e53e5;     /* 主题色悬停 */
+  --tv-primary-light: rgba(41, 98, 255, 0.1); /* 主题色浅色背景 */
+  
+  /* === 涨跌颜色 === */
+  --tv-color-up: #26a69a;          /* 涨幅颜色（绿色） */
+  --tv-color-down: #ef5350;        /* 跌幅颜色（红色） */
+  --tv-color-up-bg: rgba(38, 166, 154, 0.1);  /* 涨幅背景色 */
+  --tv-color-down-bg: rgba(239, 83, 80, 0.1); /* 跌幅背景色 */
+  
+  /* === 状态颜色 === */
+  --tv-success: #4caf50;           /* 成功色 */
+  --tv-warning: #ff9800;           /* 警告色 */
+  --tv-danger: #f44336;            /* 危险色 */
+  --tv-info: #2196f3;              /* 信息色 */
+  
+  /* === 图表专用颜色 === */
+  --tv-chart-grid: #2a2e39;        /* 图表网格线 */
+  --tv-chart-axis: #434651;        /* 坐标轴颜色 */
+  --tv-chart-crosshair: #868993;   /* 十字线颜色 */
+  --tv-chart-volume: #434651;      /* 成交量柱状图颜色 */
+  
+  /* === 阴影 === */
+  --tv-shadow-light: rgba(0, 0, 0, 0.1);
+  --tv-shadow-medium: rgba(0, 0, 0, 0.2);
+  --tv-shadow-heavy: rgba(0, 0, 0, 0.3);
+  
+  /* === Element Plus 变量覆盖 === */
+  /* 将 Element Plus 的 CSS 变量映射到 TradingView 配色 */
+  --el-bg-color-page: var(--tv-bg-primary);
+  --el-bg-color: var(--tv-bg-secondary);
+  --el-bg-color-overlay: var(--tv-bg-overlay);
+  
+  --el-border-color: var(--tv-border-primary);
+  --el-border-color-light: var(--tv-border-secondary);
+  --el-border-color-lighter: var(--tv-border-light);
+  
+  --el-text-color-primary: var(--tv-text-primary);
+  --el-text-color-regular: var(--tv-text-secondary);
+  --el-text-color-secondary: var(--tv-text-disabled);
+  
+  --el-color-primary: var(--tv-primary);
+  --el-color-primary-light-3: var(--tv-primary-hover);
+  --el-color-primary-light-9: var(--tv-primary-light);
+  
+  --el-color-success: var(--tv-color-up);
+  --el-color-danger: var(--tv-color-down);
+  --el-color-warning: var(--tv-warning);
+  --el-color-info: var(--tv-info);
+  
+  /* === 组件特定变量 === */
+  --el-input-bg-color: var(--tv-bg-overlay);
+  --el-input-border-color: var(--tv-border-primary);
+  --el-input-hover-border-color: var(--tv-border-secondary);
+  --el-input-focus-border-color: var(--tv-primary);
+  --el-input-text-color: var(--tv-text-primary);
+  
+  --el-button-bg-color: var(--tv-bg-overlay);
+  --el-button-border-color: var(--tv-border-primary);
+  --el-button-text-color: var(--tv-text-secondary);
+  --el-button-hover-bg-color: var(--tv-bg-hover);
+  --el-button-hover-text-color: var(--tv-text-primary);
+  
+  --el-card-bg-color: var(--tv-bg-overlay);
+  --el-card-border-color: var(--tv-border-primary);
+  
+  --el-table-bg-color: var(--tv-bg-overlay);
+  --el-table-tr-bg-color: var(--tv-bg-overlay);
+  --el-table-header-bg-color: var(--tv-bg-secondary);
+  --el-table-text-color: var(--tv-text-primary);
+  --el-table-header-text-color: var(--tv-text-secondary);
+  --el-table-border-color: var(--tv-border-primary);
+  
+  --el-menu-bg-color: var(--tv-bg-secondary);
+  --el-menu-hover-bg-color: var(--tv-bg-hover);
+  --el-menu-item-hover-bg-color: var(--tv-bg-hover);
+  
+  --el-tabs-header-height: 40px;
+}
+
+/* === 深色主题强制应用 === */
+html {
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--tv-bg-primary);
+  color: var(--tv-text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, 'Trebuchet MS', Roboto, Ubuntu, sans-serif;
+}
+
+/* === 滚动条样式 === */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--tv-bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--tv-border-primary);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--tv-border-secondary);
+}
+
+/* 工具类与特定组件样式已移除：统一由 Element Plus 与内联样式控制，避免重复定义 */

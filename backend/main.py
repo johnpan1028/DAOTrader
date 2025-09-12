@@ -73,6 +73,11 @@ from backend.backtest_service.backtest_engine import BacktestManager
 from backend.backtest_service.strategy_manager import StrategyManager
 from backend.backtest_service.indicators import TechnicalIndicators
 
+# API路由导入
+# from api.data_api import data_bp
+# from api.strategy_api import strategy_bp
+from api.futures_api import futures_bp
+
 # --- 1. WebSocket连接管理器 ---
 class ConnectionManager:
     def __init__(self):
@@ -262,6 +267,20 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+# 注册Flask蓝图到FastAPI（需要使用WSGIMiddleware）
+from flask import Flask
+from werkzeug.middleware.dispatcher import DispatcherMiddleware
+from fastapi.middleware.wsgi import WSGIMiddleware
+
+# 创建Flask应用用于API蓝图
+flask_app = Flask(__name__)
+# flask_app.register_blueprint(data_bp)
+# flask_app.register_blueprint(strategy_bp)
+flask_app.register_blueprint(futures_bp)
+
+# 将Flask应用挂载到FastAPI
+app.mount("/api", WSGIMiddleware(flask_app))
+
 # --- 6. 中间件配置 ---
 app.add_middleware(
     CORSMiddleware,
@@ -280,7 +299,105 @@ async def root():
 async def health():
     return {"status": "ok"}
 
-# --- 8. 数据管理API ---
+# --- 8. 期货API接口 ---
+@app.get("/futures/contracts")
+async def get_futures_contracts():
+    """获取所有期货合约"""
+    try:
+        # 模拟期货合约数据
+        contracts = {
+            "SHFE": {
+                "cu": {"name": "沪铜", "symbol": "cu", "exchange": "SHFE", "category": "有色金属"},
+                "al": {"name": "沪铝", "symbol": "al", "exchange": "SHFE", "category": "有色金属"},
+                "zn": {"name": "沪锌", "symbol": "zn", "exchange": "SHFE", "category": "有色金属"},
+                "pb": {"name": "沪铅", "symbol": "pb", "exchange": "SHFE", "category": "有色金属"},
+                "ni": {"name": "沪镍", "symbol": "ni", "exchange": "SHFE", "category": "有色金属"},
+                "sn": {"name": "沪锡", "symbol": "sn", "exchange": "SHFE", "category": "有色金属"},
+                "au": {"name": "沪金", "symbol": "au", "exchange": "SHFE", "category": "贵金属"},
+                "ag": {"name": "沪银", "symbol": "ag", "exchange": "SHFE", "category": "贵金属"},
+                "rb": {"name": "螺纹钢", "symbol": "rb", "exchange": "SHFE", "category": "黑色金属"},
+                "hc": {"name": "热轧卷板", "symbol": "hc", "exchange": "SHFE", "category": "黑色金属"},
+                "ru": {"name": "天然橡胶", "symbol": "ru", "exchange": "SHFE", "category": "化工"},
+                "bu": {"name": "沥青", "symbol": "bu", "exchange": "SHFE", "category": "化工"}
+            },
+            "DCE": {
+                "c": {"name": "玉米", "symbol": "c", "exchange": "DCE", "category": "农产品"},
+                "cs": {"name": "玉米淀粉", "symbol": "cs", "exchange": "DCE", "category": "农产品"},
+                "m": {"name": "豆粕", "symbol": "m", "exchange": "DCE", "category": "农产品"},
+                "y": {"name": "豆油", "symbol": "y", "exchange": "DCE", "category": "农产品"},
+                "a": {"name": "豆一", "symbol": "a", "exchange": "DCE", "category": "农产品"},
+                "b": {"name": "豆二", "symbol": "b", "exchange": "DCE", "category": "农产品"},
+                "p": {"name": "棕榈油", "symbol": "p", "exchange": "DCE", "category": "农产品"},
+                "i": {"name": "铁矿石", "symbol": "i", "exchange": "DCE", "category": "黑色金属"},
+                "j": {"name": "焦炭", "symbol": "j", "exchange": "DCE", "category": "黑色金属"},
+                "jm": {"name": "焦煤", "symbol": "jm", "exchange": "DCE", "category": "黑色金属"},
+                "l": {"name": "聚乙烯", "symbol": "l", "exchange": "DCE", "category": "化工"},
+                "v": {"name": "聚氯乙烯", "symbol": "v", "exchange": "DCE", "category": "化工"},
+                "pp": {"name": "聚丙烯", "symbol": "pp", "exchange": "DCE", "category": "化工"}
+            },
+            "CZCE": {
+                "ZC": {"name": "动力煤", "symbol": "ZC", "exchange": "CZCE", "category": "能源"},
+                "CF": {"name": "棉花", "symbol": "CF", "exchange": "CZCE", "category": "农产品"},
+                "SR": {"name": "白糖", "symbol": "SR", "exchange": "CZCE", "category": "农产品"},
+                "TA": {"name": "PTA", "symbol": "TA", "exchange": "CZCE", "category": "化工"},
+                "MA": {"name": "甲醇", "symbol": "MA", "exchange": "CZCE", "category": "化工"},
+                "FG": {"name": "玻璃", "symbol": "FG", "exchange": "CZCE", "category": "建材"},
+                "RM": {"name": "菜粕", "symbol": "RM", "exchange": "CZCE", "category": "农产品"},
+                "OI": {"name": "菜油", "symbol": "OI", "exchange": "CZCE", "category": "农产品"},
+                "AP": {"name": "苹果", "symbol": "AP", "exchange": "CZCE", "category": "农产品"}
+            }
+        }
+        return {"success": True, "data": contracts, "message": "获取合约信息成功"}
+    except Exception as e:
+        return {"success": False, "error": str(e), "message": "获取合约信息失败"}
+
+@app.get("/futures/exchanges")
+async def get_futures_exchanges():
+    """获取交易所列表"""
+    try:
+        exchanges = [
+            {"code": "SHFE", "name": "上海期货交易所", "name_en": "Shanghai Futures Exchange"},
+            {"code": "DCE", "name": "大连商品交易所", "name_en": "Dalian Commodity Exchange"},
+            {"code": "CZCE", "name": "郑州商品交易所", "name_en": "Zhengzhou Commodity Exchange"},
+            {"code": "CFFEX", "name": "中国金融期货交易所", "name_en": "China Financial Futures Exchange"}
+        ]
+        return {"success": True, "data": exchanges, "message": "获取交易所信息成功"}
+    except Exception as e:
+        return {"success": False, "error": str(e), "message": "获取交易所信息失败"}
+
+@app.get("/futures/categories")
+async def get_futures_categories():
+    """获取品种分类列表"""
+    try:
+        categories = [
+            {"code": "有色金属", "name": "有色金属", "name_en": "Non-ferrous Metals"},
+            {"code": "贵金属", "name": "贵金属", "name_en": "Precious Metals"},
+            {"code": "黑色金属", "name": "黑色金属", "name_en": "Ferrous Metals"},
+            {"code": "能源", "name": "能源", "name_en": "Energy"},
+            {"code": "化工", "name": "化工", "name_en": "Chemical"},
+            {"code": "农产品", "name": "农产品", "name_en": "Agricultural Products"},
+            {"code": "建材", "name": "建材", "name_en": "Building Materials"}
+        ]
+        return {"success": True, "data": categories, "message": "获取分类信息成功"}
+    except Exception as e:
+        return {"success": False, "error": str(e), "message": "获取分类信息失败"}
+
+@app.get("/futures/statistics")
+async def get_futures_statistics():
+    """获取统计信息"""
+    try:
+        stats = {
+            "total_contracts": 45,
+            "exchanges_count": 4,
+            "categories_count": 7,
+            "active_contracts": 42,
+            "last_update": datetime.now().isoformat()
+        }
+        return {"success": True, "data": stats, "message": "获取统计信息成功"}
+    except Exception as e:
+        return {"success": False, "error": str(e), "message": "获取统计信息失败"}
+
+# --- 9. 数据管理API ---
 @app.post("/api/data/download")
 async def download_data(request: dict):
     """下载股票数据"""

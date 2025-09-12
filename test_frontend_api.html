@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>测试前端API</title>
+</head>
+<body>
+    <h1>期货数据测试</h1>
+    
+    <div id="exchanges">
+        <h2>交易所数据</h2>
+        <div id="exchanges-content">加载中...</div>
+    </div>
+    
+    <div id="categories">
+        <h2>分类数据</h2>
+        <div id="categories-content">加载中...</div>
+    </div>
+    
+    <div id="contracts">
+        <h2>合约数据</h2>
+        <div id="contracts-content">加载中...</div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:8000/api';
+        
+        async function fetchData(endpoint) {
+            try {
+                const response = await fetch(`${API_BASE_URL}${endpoint}`);
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                console.error(`获取 ${endpoint} 数据失败:`, error);
+                return { success: false, error: error.message };
+            }
+        }
+        
+        async function loadExchanges() {
+            const result = await fetchData('/futures/exchanges');
+            const content = document.getElementById('exchanges-content');
+            
+            if (result.success) {
+                content.innerHTML = `
+                    <p>数量: ${result.count}</p>
+                    <ul>
+                        ${result.data.map(ex => `<li>${ex.code}: ${ex.name}</li>`).join('')}
+                    </ul>
+                `;
+            } else {
+                content.innerHTML = `<p style="color: red;">加载失败: ${result.error || '未知错误'}</p>`;
+            }
+        }
+        
+        async function loadCategories() {
+            const result = await fetchData('/futures/categories');
+            const content = document.getElementById('categories-content');
+            
+            if (result.success) {
+                content.innerHTML = `
+                    <p>数量: ${result.count}</p>
+                    <ul>
+                        ${result.data.map(cat => `<li>${cat.code}: ${cat.name}</li>`).join('')}
+                    </ul>
+                `;
+            } else {
+                content.innerHTML = `<p style="color: red;">加载失败: ${result.error || '未知错误'}</p>`;
+            }
+        }
+        
+        async function loadContracts() {
+            const result = await fetchData('/futures/contracts');
+            const content = document.getElementById('contracts-content');
+            
+            if (result.success) {
+                const contracts = Object.values(result.data);
+                content.innerHTML = `
+                    <p>合约数量: ${contracts.length}</p>
+                    <p>前5个合约:</p>
+                    <ul>
+                        ${contracts.slice(0, 5).map(contract => 
+                            `<li>${contract.symbol}: ${contract.name} (${contract.exchange})</li>`
+                        ).join('')}
+                    </ul>
+                `;
+            } else {
+                content.innerHTML = `<p style="color: red;">加载失败: ${result.error || '未知错误'}</p>`;
+            }
+        }
+        
+        // 页面加载完成后执行
+        document.addEventListener('DOMContentLoaded', () => {
+            loadExchanges();
+            loadCategories();
+            loadContracts();
+        });
+    </script>
+</body>
+</html>
