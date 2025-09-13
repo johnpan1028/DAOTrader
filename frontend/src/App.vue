@@ -91,7 +91,7 @@
         <!-- 右侧：功能按钮 -->
         <el-col :span="8" :style="{ textAlign: 'right' }">
           <el-space>
-            <el-button size="small" :icon="DataAnalysis" text>指标</el-button>
+            <el-button size="small" :icon="DataAnalysis" text @click="indicatorDialogVisible = true">指标</el-button>
             <el-button size="small" :icon="Camera" text>截图</el-button>
             <el-button size="small" :icon="Setting" text />
             <el-button size="small" :icon="FullScreen" text @click="toggleFullscreen" />
@@ -124,15 +124,126 @@
           :style="{ 
             background: 'var(--tv-bg-primary)', 
             padding: '0',
-            minWidth: '300px',
-            height: '100%'
+            height: '100%',
+            overflow: 'hidden'
           }"
         >
-          <el-scrollbar :style="{ height: '100%' }">
-            <div :style="{ padding: '16px', height: '100%', color: 'var(--tv-text-primary)' }">
-              中间区域内容
+          <el-container direction="vertical" :style="{ height: '100%', overflow: 'hidden' }">
+            <!-- 上方：K线图表区域 -->
+            <el-main :style="{ padding: '0', flex: '1', overflow: 'hidden' }">
+              <KLineChart :chart-type="chartType as any" :indicators="indicatorState" />
+            </el-main>
+            
+            <!-- 拖拽手柄 -->
+            <div 
+              class="resize-handle"
+              :style="{
+                height: '4px',
+                background: isBottomResizing ? 'var(--tv-accent-primary)' : (isBottomResizeHovered ? 'var(--tv-accent-primary)' : 'var(--tv-border-primary)'),
+                cursor: 'row-resize',
+                transition: 'background-color 0.2s',
+                position: 'relative',
+                zIndex: 10,
+                flexShrink: 0,
+                userSelect: 'none'
+              }"
+              @mousedown="startBottomResize"
+              @mouseenter="isBottomResizeHovered = true"
+              @mouseleave="isBottomResizeHovered = false"
+            >
+              <!-- 拖拽指示器 -->
+              <div :style="{
+                position: 'absolute',
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                width: '40px',
+                height: '2px',
+                background: 'var(--tv-text-secondary)',
+                borderRadius: '1px',
+                pointerEvents: 'none'
+              }"></div>
             </div>
-          </el-scrollbar>
+            
+            <!-- 底部：标签页容器 -->
+            <el-footer 
+              :height="bottomPanelHeight + 'px'" 
+              :style="{ 
+                background: 'var(--tv-bg-secondary)', 
+                padding: '0',
+                minHeight: '25px',
+                overflow: 'hidden',
+                flexShrink: 0
+              }"
+            >
+              <div class="bottom-tabs-container">
+                <el-tabs 
+                  v-model="activeTab" 
+                  type="card"
+                  :style="{
+                    height: '100%',
+                    '--el-tabs-header-height': '40px'
+                  }"
+                  class="bottom-tabs"
+                >
+                  <div class="bottom-panel-controls">
+                    <el-button
+                      :icon="isBottomMaximized ? ArrowDown : ArrowUp"
+                      size="small"
+                      text
+                      @click="toggleBottomPanel"
+                      :title="isBottomMaximized ? '最小化' : '最大化'"
+                      class="panel-toggle-btn"
+                    />
+                  </div>
+                <el-tab-pane label="策略测试" name="strategy">
+                  <div :style="{ 
+                    height: 'calc(100% - 40px)', 
+                    color: 'var(--tv-text-primary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '14px',
+                    overflow: 'hidden',
+                    padding: '8px'
+                  }">
+                    策略测试内容区域
+                  </div>
+                </el-tab-pane>
+                
+                <el-tab-pane label="回放交易" name="replay">
+                  <div :style="{ 
+                    height: 'calc(100% - 40px)', 
+                    color: 'var(--tv-text-primary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '14px',
+                    overflow: 'hidden',
+                    padding: '8px'
+                  }">
+                    回放交易内容区域
+                  </div>
+                </el-tab-pane>
+                
+                <el-tab-pane label="交易面板" name="trading">
+                  <div :style="{ 
+                    height: 'calc(100% - 40px)', 
+                    color: 'var(--tv-text-primary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '14px',
+                    overflow: 'hidden',
+                    padding: '8px'
+                  }">
+                    交易面板内容区域 (高度: {{ bottomPanelHeight }}px)
+                  </div>
+                </el-tab-pane>
+              </el-tabs>
+              </div>
+            </el-footer>
+          </el-container>
         </el-main>
         
         <!-- 右侧分割线 -->
@@ -171,11 +282,32 @@
         </el-aside>
       </el-container>
     </el-main>
+
+    <!-- 指标弹窗 -->
+    <el-dialog v-model="indicatorDialogVisible" title="指标" width="360px" append-to-body>
+      <div>
+        <el-divider content-position="left">主图指标</el-divider>
+        <el-checkbox v-model="indicatorState.ma">MA(移动平均线)</el-checkbox>
+        <el-checkbox disabled>EMA(未来可扩展)</el-checkbox>
+        <el-checkbox disabled>SMA(未来可扩展)</el-checkbox>
+        <el-checkbox disabled>BOLL(未来可扩展)</el-checkbox>
+        <el-checkbox disabled>SAR(未来可扩展)</el-checkbox>
+        <el-checkbox disabled>BBI(未来可扩展)</el-checkbox>
+        <el-divider content-position="left">副图指标</el-divider>
+        <el-checkbox v-model="indicatorState.vol">VOL(成交量)</el-checkbox>
+        <el-checkbox v-model="indicatorState.macd">MACD</el-checkbox>
+      </div>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="indicatorDialogVisible = false">关闭</el-button>
+        </span>
+      </template>
+    </el-dialog>
   </el-container>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import {
   TrendCharts,
   Setting,
@@ -184,14 +316,21 @@ import {
   Grid,
   Connection,
   DataAnalysis,
-  Camera
+  Camera,
+  ArrowUp,
+  ArrowDown
 } from '@element-plus/icons-vue'
+import KLineChart from './components/KLineChart.vue'
 
 // 基础响应式数据
 const symbolSearch = ref('')
 const timeframe = ref('15m')
-const chartType = ref('candle')
+const chartType = ref<'candle' | 'line'>('candle')
 const isDividerHovered = ref(false)
+
+// 指标状态与弹窗
+const indicatorDialogVisible = ref(false)
+const indicatorState = ref({ ma: true, vol: true, macd: false })
 
 // 股票信息
 const currentSymbol = ref('BTCUSDT')
@@ -212,6 +351,70 @@ const isResizing = ref(false)
 const resizeType = ref('')
 const startX = ref(0)
 const startWidth = ref(0)
+
+// 底部面板高度控制
+const bottomPanelHeight = ref(40) // 默认为最小化状态
+const isBottomResizing = ref(false)
+const isBottomResizeHovered = ref(false)
+const startY = ref(0)
+const startHeight = ref(0)
+const minBottomHeight = 40 // 调整最小高度为40px
+const maxBottomHeight = ref(0) // 将在mounted中计算
+
+// 底部标签页控制
+const activeTab = ref('trading') // 默认激活交易面板
+const isBottomMaximized = ref(false) // 底部面板最大化状态
+const previousBottomHeight = ref(200) // 记录之前的高度
+
+// 底部面板拖拽调整方法
+const startBottomResize = (event: MouseEvent) => {
+  isBottomResizing.value = true
+  startY.value = event.clientY
+  startHeight.value = bottomPanelHeight.value
+  
+  // 计算最大高度（窗口高度 - 顶部栏高度 - 最小图表区域高度）
+  const headerHeight = 44
+  const minChartHeight = 0 // 允许完全拖拽到顶部
+  maxBottomHeight.value = window.innerHeight - headerHeight - minChartHeight
+  
+  document.body.classList.add('resizing')
+  document.addEventListener('mousemove', handleBottomResize)
+  document.addEventListener('mouseup', stopBottomResize)
+  event.preventDefault()
+  event.stopPropagation()
+}
+
+const handleBottomResize = (event: MouseEvent) => {
+  if (!isBottomResizing.value) return
+  
+  const deltaY = startY.value - event.clientY // 向上拖拽为正值
+  const newHeight = startHeight.value + deltaY
+  const clampedHeight = Math.max(minBottomHeight, Math.min(maxBottomHeight.value, newHeight))
+  
+  bottomPanelHeight.value = clampedHeight
+  event.preventDefault()
+}
+
+const stopBottomResize = () => {
+  isBottomResizing.value = false
+  document.body.classList.remove('resizing')
+  document.removeEventListener('mousemove', handleBottomResize)
+  document.removeEventListener('mouseup', stopBottomResize)
+}
+
+// 底部面板最大化/最小化切换
+const toggleBottomPanel = () => {
+  if (isBottomMaximized.value) {
+    // 从最大化状态恢复到之前的高度
+    bottomPanelHeight.value = previousBottomHeight.value
+    isBottomMaximized.value = false
+  } else {
+    // 保存当前高度并最大化
+    previousBottomHeight.value = bottomPanelHeight.value
+    bottomPanelHeight.value = maxBottomHeight.value
+    isBottomMaximized.value = true
+  }
+}
 
 // 拖拽调整大小方法（仅右边栏）
 const startResize = (type: string, event: MouseEvent) => {
@@ -261,9 +464,20 @@ const toggleFullscreen = () => {
 onMounted(() => {
   console.log('简化版TradingView界面已加载')
   
+  // 初始化底部面板最大高度
+  const headerHeight = 44
+  const minChartHeight = 0 // 允许完全拖拽到顶部
+  maxBottomHeight.value = window.innerHeight - headerHeight - minChartHeight
+  
   // 监听窗口大小变化
   const handleResize = () => {
     windowWidth.value = window.innerWidth
+    // 更新底部面板最大高度
+    maxBottomHeight.value = window.innerHeight - headerHeight - minChartHeight
+    // 确保当前高度不超过新的最大值
+    if (bottomPanelHeight.value > maxBottomHeight.value) {
+      bottomPanelHeight.value = maxBottomHeight.value
+    }
   }
   
   window.addEventListener('resize', handleResize)
@@ -310,7 +524,6 @@ html, body {
   margin: 0;
   padding: 0;
   height: 100vh;
-  width: 100vw;
   font-family: var(--tv-font-family);
   background-color: var(--tv-bg-primary);
   color: var(--tv-text-primary);
@@ -587,3 +800,117 @@ body.resizing * {
 
 
 
+/* 拖拽状态样式 */
+.resizing {
+  user-select: none !important;
+  cursor: row-resize !important;
+}
+
+.resizing * {
+  user-select: none !important;
+  pointer-events: none !important;
+}
+
+/* 拖拽手柄悬停效果 */
+.resize-handle:hover {
+  background: var(--tv-accent-primary) !important;
+}
+
+/* 底部标签页样式 */
+.bottom-tabs-container {
+  height: 100%;
+  position: relative;
+}
+
+:deep(.bottom-tabs) {
+  height: 100%;
+}
+
+:deep(.bottom-tabs .el-tabs__header) {
+  margin: 0;
+  background: var(--tv-bg-secondary);
+  border-bottom: 1px solid var(--tv-border-primary);
+  height: 40px;
+  position: relative;
+}
+
+:deep(.bottom-tabs .el-tabs__nav-wrap) {
+  height: 40px;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+}
+
+:deep(.bottom-tabs .el-tabs__nav) {
+  border: none;
+  height: auto;
+}
+
+:deep(.bottom-tabs .el-tabs__item) {
+  height: 28px;
+  line-height: 28px;
+  padding: 0 12px;
+  margin-right: 8px;
+  border: 1px solid var(--tv-border-primary);
+  border-radius: 4px;
+  background: var(--tv-bg-primary);
+  color: var(--tv-text-primary);
+  font-size: 12px;
+  transition: all 0.2s;
+}
+
+/* 底部面板控制按钮样式 */
+.bottom-panel-controls {
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  padding-right: 8px;
+  z-index: 10;
+}
+
+.panel-toggle-btn {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--tv-text-secondary);
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.panel-toggle-btn:hover {
+  background: var(--tv-accent-primary-alpha);
+  color: var(--tv-text-primary);
+}
+
+:deep(.bottom-tabs .el-tabs__item:hover) {
+  background: var(--tv-accent-primary);
+  color: white;
+  border-color: var(--tv-accent-primary);
+}
+
+:deep(.bottom-tabs .el-tabs__item.is-active) {
+  background: var(--tv-accent-primary);
+  color: white;
+  border-color: var(--tv-accent-primary);
+}
+
+:deep(.bottom-tabs .el-tabs__content) {
+  height: calc(100% - 40px);
+  padding: 0;
+}
+
+:deep(.bottom-tabs .el-tab-pane) {
+  height: 100%;
+}
+
+
+
+  

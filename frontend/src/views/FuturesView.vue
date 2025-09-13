@@ -227,11 +227,8 @@
         </div>
         
         <!-- K线图表 -->
-        <div class="chart-container" v-if="showChart">
-          <div class="chart-placeholder">
-            <p>K线图表功能开发中...</p>
-            <p>数据已准备就绪，可集成 ECharts 或其他图表库</p>
-          </div>
+        <div class="chart-container" v-if="showChart" :style="{ height: '520px' }">
+          <KLineChart />
         </div>
         
         <!-- 数据表格 -->
@@ -305,12 +302,14 @@
 <script>
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import FuturesSelector from '../components/FuturesSelector.vue'
+import KLineChart from '../components/KLineChart.vue'
 import { futuresApi, dataFormatter } from '../api/futures'
 
 export default {
   name: 'FuturesView',
   components: {
-    FuturesSelector
+    FuturesSelector,
+    KLineChart
   },
   setup() {
     // 响应式数据
@@ -318,7 +317,7 @@ export default {
     const loading = ref(false)
     const loadingHistorical = ref(false)
     const loadingText = ref('')
-    const showChart = ref(false)
+    const showChart = ref(true)
     
     // 合约相关
     const selectedContracts = ref([])
