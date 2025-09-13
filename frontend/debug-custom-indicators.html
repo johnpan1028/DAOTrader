@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>自定义指标调试页面</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #1e1e1e;
+            color: #ffffff;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .debug-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #444;
+            border-radius: 8px;
+            background-color: #2d2d2d;
+        }
+        .chart-container {
+            width: 100%;
+            height: 400px;
+            border: 1px solid #444;
+            margin: 10px 0;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            background-color: #007acc;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #005a9e;
+        }
+        .log {
+            background-color: #1a1a1a;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>自定义指标调试页面</h1>
+        
+        <div class="debug-section">
+            <h2>指标注册测试</h2>
+            <button onclick="testIndicatorRegistration()">测试指标注册</button>
+            <button onclick="testIndicatorCreation()">测试指标创建</button>
+            <button onclick="clearLog()">清空日志</button>
+            <div id="log" class="log"></div>
+        </div>
+        
+        <div class="debug-section">
+            <h2>图表测试</h2>
+            <div id="chart" class="chart-container"></div>
+            <button onclick="createChart()">创建图表</button>
+            <button onclick="addCustomMA()">添加自定义MA</button>
+            <button onclick="addCustomRSI()">添加自定义RSI</button>
+        </div>
+    </div>
+
+    <script type="module">
+        import { init } from 'klinecharts';
+        import * as klinecharts from 'klinecharts';
+        
+        // 导入自定义指标
+        import CustomMA from './indicators/main/custom-ma.js';
+        import CustomRSI from './indicators/sub/custom-rsi.js';
+        
+        let chart = null;
+        
+        function log(message) {
+            const logElement = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            logElement.textContent += `[${timestamp}] ${message}\n`;
+            logElement.scrollTop = logElement.scrollHeight;
+            console.log(message);
+        }
+        
+        window.testIndicatorRegistration = function() {
+            log('开始测试指标注册...');
+            
+            try {
+                // 注册自定义MA指标
+                klinecharts.registerIndicator(CustomMA);
+                log(`✓ 成功注册自定义MA指标: ${CustomMA.name}`);
+                
+                // 注册自定义RSI指标
+                klinecharts.registerIndicator(CustomRSI);
+                log(`✓ 成功注册自定义RSI指标: ${CustomRSI.name}`);
+                
+                log('所有自定义指标注册完成');
+            } catch (error) {
+                log(`✗ 指标注册失败: ${error.message}`);
+                console.error('指标注册错误:', error);
+            }
+        };
+        
+        window.testIndicatorCreation = function() {
+            if (!chart) {
+                log('请先创建图表');
+                return;
+            }
+            
+            log('开始测试指标创建...');
+            
+            try {
+                // 测试创建自定义MA指标
+                const maId = chart.createIndicator('CUSTOM_MA', true, { id: 'candle_pane' });
+                log(`✓ 成功创建自定义MA指标，ID: ${maId}`);
+                
+                // 测试创建自定义RSI指标
+                const rsiId = chart.createIndicator('CUSTOM_RSI', false);
+                log(`✓ 成功创建自定义RSI指标，ID: ${rsiId}`);
+                
+            } catch (error) {
+                log(`✗ 指标创建失败: ${error.message}`);
+                console.error('指标创建错误:', error);
+            }
+        };
+        
+        window.createChart = function() {
+            const chartContainer = document.getElementById('chart');
+            
+            try {
+                chart = init(chartContainer);
+                log('✓ 图表创建成功');
+                
+                // 添加测试数据
+                const testData = generateTestData();
+                chart.applyNewData(testData);
+                log(`✓ 添加了 ${testData.length} 条测试数据`);
+                
+            } catch (error) {
+                log(`✗ 图表创建失败: ${error.message}`);
+                console.error('图表创建错误:', error);
+            }
+        };
+        
+        window.addCustomMA = function() {
+            if (!chart) {
+                log('请先创建图表');
+                return;
+            }
+            
+            try {
+                const id = chart.createIndicator('CUSTOM_MA', true, { id: 'candle_pane' });
+                log(`✓ 添加自定义MA指标成功，ID: ${id}`);
+            } catch (error) {
+                log(`✗ 添加自定义MA指标失败: ${error.message}`);
+            }
+        };
+        
+        window.addCustomRSI = function() {
+            if (!chart) {
+                log('请先创建图表');
+                return;
+            }
+            
+            try {
+                const id = chart.createIndicator('CUSTOM_RSI', false);
+                log(`✓ 添加自定义RSI指标成功，ID: ${id}`);
+            } catch (error) {
+                log(`✗ 添加自定义RSI指标失败: ${error.message}`);
+            }
+        };
+        
+        window.clearLog = function() {
+            document.getElementById('log').textContent = '';
+        };
+        
+        function generateTestData() {
+            const data = [];
+            let price = 100;
+            const now = Date.now();
+            
+            for (let i = 0; i < 100; i++) {
+                const change = (Math.random() - 0.5) * 4;
+                price += change;
+                
+                const open = price;
+                const close = price + (Math.random() - 0.5) * 2;
+                const high = Math.max(open, close) + Math.random() * 1;
+                const low = Math.min(open, close) - Math.random() * 1;
+                const volume = Math.floor(Math.random() * 1000000);
+                
+                data.push({
+                    timestamp: now - (100 - i) * 60000, // 1分钟间隔
+                    open: parseFloat(open.toFixed(2)),
+                    high: parseFloat(high.toFixed(2)),
+                    low: parseFloat(low.toFixed(2)),
+                    close: parseFloat(close.toFixed(2)),
+                    volume: volume
+                });
+                
+                price = close;
+            }
+            
+            return data;
+        }
+        
+        // 页面加载完成后自动注册指标
+        window.addEventListener('load', () => {
+            log('页面加载完成，开始自动注册指标...');
+            testIndicatorRegistration();
+        });
+    </script>
+</body>
+</html>

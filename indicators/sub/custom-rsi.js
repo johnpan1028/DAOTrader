@@ -57,50 +57,40 @@ export default {
     const period = calcParams[0] || 14;
     const result = [];
     
-    let avgGain = 0;
-    let avgLoss = 0;
-    
     for (let i = 0; i < dataList.length; i++) {
       const rsiData = {
+        rsi: null,       // RSI值
         overbought: 70,  // 超买线
         oversold: 30     // 超卖线
       };
       
-      if (i === 0) {
+      if (i < period) {
+        // 数据不足，不计算RSI
         result.push(rsiData);
         continue;
       }
       
-      const change = dataList[i].close - dataList[i - 1].close;
-      const gain = change > 0 ? change : 0;
-      const loss = change < 0 ? -change : 0;
+      // 计算最近period期间的平均收益和损失
+      let totalGain = 0;
+      let totalLoss = 0;
       
-      if (i < period) {
-        // 初始平均值计算
-        avgGain = (avgGain * (i - 1) + gain) / i;
-        avgLoss = (avgLoss * (i - 1) + loss) / i;
-      } else if (i === period) {
-        // 第一个RSI值
-        avgGain = (avgGain * (period - 1) + gain) / period;
-        avgLoss = (avgLoss * (period - 1) + loss) / period;
-        
-        if (avgLoss === 0) {
-          rsiData.rsi = 100;
+      for (let j = i - period + 1; j <= i; j++) {
+        const change = dataList[j].close - dataList[j - 1].close;
+        if (change > 0) {
+          totalGain += change;
         } else {
-          const rs = avgGain / avgLoss;
-          rsiData.rsi = 100 - (100 / (1 + rs));
+          totalLoss += Math.abs(change);
         }
+      }
+      
+      const avgGain = totalGain / period;
+      const avgLoss = totalLoss / period;
+      
+      if (avgLoss === 0) {
+        rsiData.rsi = 100;
       } else {
-        // 后续RSI值使用平滑移动平均
-        avgGain = (avgGain * (period - 1) + gain) / period;
-        avgLoss = (avgLoss * (period - 1) + loss) / period;
-        
-        if (avgLoss === 0) {
-          rsiData.rsi = 100;
-        } else {
-          const rs = avgGain / avgLoss;
-          rsiData.rsi = 100 - (100 / (1 + rs));
-        }
+        const rs = avgGain / avgLoss;
+        rsiData.rsi = 100 - (100 / (1 + rs));
       }
       
       result.push(rsiData);

@@ -168,7 +168,7 @@ watch(
   { deep: true }
 );
 
-onMounted(() => {
+onMounted(async () => {
   if (!chartContainer.value) return;
   
   // 初始化图表
@@ -177,9 +177,16 @@ onMounted(() => {
   // 注册自定义指标
   try {
     // 导入klinecharts模块用于注册指标
-    import('klinecharts').then(klinecharts => {
-      registerCustomIndicators(klinecharts);
-      console.log('自定义指标注册完成');
+    const klinecharts = await import('klinecharts');
+    registerCustomIndicators(klinecharts);
+    console.log('自定义指标注册完成');
+    
+    // 注册完成后，应用当前的指标状态
+    Object.entries(props.indicators).forEach(([key, enabled]) => {
+      if (enabled) {
+        const indicatorName = key.toUpperCase().replace('_', '_');
+        ensureIndicator(indicatorName, enabled);
+      }
     });
   } catch (error) {
     console.error('自定义指标注册失败:', error);
