@@ -5,7 +5,7 @@
       height="44px" 
       :style="{ 
         background: 'var(--tv-bg-secondary)', 
-        borderBottom: '1px solid var(--tv-border-primary)',
+        borderBottom: '4px solid var(--tv-border-primary)',
         padding: '0 12px',
         boxShadow: 'none'
       }"
@@ -135,21 +135,23 @@
             </el-main>
             
             <!-- 拖拽手柄 -->
-            <div 
+            <el-divider 
+              direction="horizontal"
               class="resize-handle"
               :style="{
                 height: '4px',
-                background: isBottomResizing ? 'var(--tv-accent-primary)' : (isBottomResizeHovered ? 'var(--tv-accent-primary)' : 'var(--tv-border-primary)'),
-                cursor: 'row-resize',
-                transition: 'background-color 0.2s',
+                background: 'var(--tv-border-primary)',
+                border: 'none',
+                cursor: isBottomResizing ? 'grabbing' : 'grab',
+                transition: 'background 0.2s',
                 position: 'relative',
                 zIndex: 10,
                 flexShrink: 0,
-                userSelect: 'none'
+                userSelect: 'none',
+                margin: '0'
               }"
               @mousedown="startBottomResize"
-              @mouseenter="isBottomResizeHovered = true"
-              @mouseleave="isBottomResizeHovered = false"
+
             >
               <!-- 拖拽指示器 -->
               <div :style="{
@@ -163,7 +165,7 @@
                 borderRadius: '1px',
                 pointerEvents: 'none'
               }"></div>
-            </div>
+            </el-divider>
             
             <!-- 底部：标签页容器 -->
             <el-footer 
@@ -173,7 +175,8 @@
                 padding: '0',
                 minHeight: '25px',
                 overflow: 'hidden',
-                flexShrink: 0
+                flexShrink: 0,
+                borderTop: '1px solid var(--tv-border-primary)'
               }"
             >
               <div class="bottom-tabs-container">
@@ -252,15 +255,14 @@
           :style="{ 
             width: '4px', 
             height: '100%', 
-            background: isDividerHovered ? 'var(--tv-accent-primary)' : 'var(--tv-border-primary)',
-            cursor: 'col-resize',
+            background: 'var(--tv-border-primary)',
+            border: 'none',
+            cursor: isRightResizing ? 'grabbing' : 'grab',
             margin: '0',
-            borderColor: 'var(--tv-border-primary)',
-            transition: 'background-color 0.2s'
+            transition: 'background 0.2s'
           }"
           @mousedown="startResize('right', $event)"
-          @mouseenter="isDividerHovered = true"
-          @mouseleave="isDividerHovered = false"
+
         />
         
         <!-- 右边栏 -->
@@ -268,10 +270,10 @@
           :width="rightPanelWidth + 'px'" 
           :style="{ 
             background: 'var(--tv-bg-secondary)', 
-            borderLeft: '4px solid var(--tv-border-primary)',
             minWidth: '150px',
             maxWidth: '500px',
-            height: '100%'
+            height: '100%',
+            borderLeft: '1px solid var(--tv-border-primary)'
           }"
         >
           <el-scrollbar :style="{ height: '100%' }">
@@ -349,7 +351,7 @@ const klineChartRef = ref<InstanceType<typeof KLineChart> | null>(null)
 const symbolSearch = ref('')
 const timeframe = ref('15m')
 const chartType = ref<'candle' | 'line'>('candle')
-const isDividerHovered = ref(false)
+
 
 // 指标状态与弹窗
 const indicatorDialogVisible = ref(false)
@@ -410,6 +412,7 @@ const isMobile = computed(() => windowWidth.value < 768)
 const leftPanelWidth = ref(52)
 const rightPanelWidth = ref(250)
 const isResizing = ref(false)
+const isRightResizing = ref(false)
 const resizeType = ref('')
 const startX = ref(0)
 const startWidth = ref(0)
@@ -417,7 +420,7 @@ const startWidth = ref(0)
 // 底部面板高度控制
 const bottomPanelHeight = ref(40) // 默认为最小化状态
 const isBottomResizing = ref(false)
-const isBottomResizeHovered = ref(false)
+
 const startY = ref(0)
 const startHeight = ref(0)
 const minBottomHeight = 40 // 调整最小高度为40px
@@ -483,6 +486,7 @@ const startResize = (type: string, event: MouseEvent) => {
   if (type !== 'right') return // 只允许调整右边栏
   
   isResizing.value = true
+  isRightResizing.value = true
   resizeType.value = type
   startX.value = event.clientX
   startWidth.value = rightPanelWidth.value
@@ -505,6 +509,7 @@ const handleResize = (event: MouseEvent) => {
 
 const stopResize = () => {
   isResizing.value = false
+  isRightResizing.value = false
   resizeType.value = ''
   
   // 移除拖拽状态类名

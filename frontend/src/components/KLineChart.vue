@@ -36,6 +36,8 @@ let ws: WebSocket | null = null;
 let hasInitialData = false;
 // 维护每个面板+指标名的可见性，用于tooltip图标的显隐切换
 const indicatorVisibility = new Map<string, boolean>();
+// ResizeObserver 用于监听容器尺寸变化
+let resizeObserver: ResizeObserver | null = null;
 
 // 暴露方法：父组件可调用以应用指标参数
 function applyIndicatorCalcParams(payload: { paneId: string; name: string; calcParams: any[] }) {
@@ -404,6 +406,19 @@ onMounted(async () => {
   // 应用初始图表类型
   applyChartType(props.chartType);
 
+  // 初始化 ResizeObserver 监听容器尺寸变化
+  if (chartContainer.value) {
+    resizeObserver = new ResizeObserver((entries) => {
+      if (chart && entries.length > 0) {
+        // 使用 requestAnimationFrame 确保在下一帧执行 resize
+        requestAnimationFrame(() => {
+          chart.resize();
+        });
+      }
+    });
+    resizeObserver.observe(chartContainer.value);
+  }
+
   // 图表初始化完成后，根据初始 props 创建指标
   console.log('Applying initial indicators:', props.indicators);
   if (props.indicators) {
@@ -527,6 +542,12 @@ watch(
 );
 
 onUnmounted(() => {
+  // 清理 ResizeObserver
+  if (resizeObserver) {
+    resizeObserver.disconnect();
+    resizeObserver = null;
+  }
+  
   if (chart) {
     if (chartContainer.value) {
       dispose(chartContainer.value);
