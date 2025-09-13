@@ -131,7 +131,7 @@
           <el-container direction="vertical" :style="{ height: '100%', overflow: 'hidden' }">
             <!-- 上方：K线图表区域 -->
             <el-main :style="{ padding: '0', flex: '1', overflow: 'hidden' }">
-              <KLineChart :chart-type="chartType as any" :indicators="indicatorState" />
+              <KLineChart ref="klineChartRef" :chart-type="chartType as any" :indicators="indicatorState" />
             </el-main>
             
             <!-- 拖拽手柄 -->
@@ -284,22 +284,41 @@
     </el-main>
 
     <!-- 指标弹窗 -->
-    <el-dialog v-model="indicatorDialogVisible" title="指标" width="360px" append-to-body>
+    <el-dialog v-model="indicatorDialogVisible" title="技术指标" width="420px" append-to-body>
       <div>
         <el-divider content-position="left">主图指标</el-divider>
-        <el-checkbox v-model="indicatorState.ma">MA(移动平均线)</el-checkbox>
-        <el-checkbox disabled>EMA(未来可扩展)</el-checkbox>
-        <el-checkbox disabled>SMA(未来可扩展)</el-checkbox>
-        <el-checkbox disabled>BOLL(未来可扩展)</el-checkbox>
-        <el-checkbox disabled>SAR(未来可扩展)</el-checkbox>
-        <el-checkbox disabled>BBI(未来可扩展)</el-checkbox>
+        <div style="margin-bottom: 16px;">
+          <div style="margin-bottom: 8px; color: #909399; font-size: 12px;">内置指标</div>
+          <el-checkbox v-model="indicatorState.ma" style="display: block; margin-bottom: 8px;">MA(移动平均线)</el-checkbox>
+          <el-checkbox disabled style="display: block; margin-bottom: 8px;">EMA(未来可扩展)</el-checkbox>
+          <el-checkbox disabled style="display: block; margin-bottom: 8px;">BOLL(未来可扩展)</el-checkbox>
+        </div>
+        <div style="margin-bottom: 16px;">
+          <div style="margin-bottom: 8px; color: #409EFF; font-size: 12px;">自定义指标</div>
+          <el-checkbox v-model="indicatorState.custom_ma" style="display: block; margin-bottom: 8px;">
+            <span style="color: #409EFF;">自定义MA</span>
+            <el-tag size="small" type="info" style="margin-left: 8px;">自定义</el-tag>
+          </el-checkbox>
+        </div>
+        
         <el-divider content-position="left">副图指标</el-divider>
-        <el-checkbox v-model="indicatorState.vol">VOL(成交量)</el-checkbox>
-        <el-checkbox v-model="indicatorState.macd">MACD</el-checkbox>
+        <div style="margin-bottom: 16px;">
+          <div style="margin-bottom: 8px; color: #909399; font-size: 12px;">内置指标</div>
+          <el-checkbox v-model="indicatorState.vol" style="display: block; margin-bottom: 8px;">VOL(成交量)</el-checkbox>
+          <el-checkbox v-model="indicatorState.macd" style="display: block; margin-bottom: 8px;">MACD</el-checkbox>
+        </div>
+        <div>
+          <div style="margin-bottom: 8px; color: #409EFF; font-size: 12px;">自定义指标</div>
+          <el-checkbox v-model="indicatorState.custom_rsi" style="display: block; margin-bottom: 8px;">
+            <span style="color: #409EFF;">自定义RSI</span>
+            <el-tag size="small" type="info" style="margin-left: 8px;">自定义</el-tag>
+          </el-checkbox>
+        </div>
       </div>
       <template #footer>
         <span class="dialog-footer">
           <el-button @click="indicatorDialogVisible = false">关闭</el-button>
+          <el-button type="primary" @click="applyIndicatorSettings">应用设置</el-button>
         </span>
       </template>
     </el-dialog>
@@ -308,6 +327,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ElMessage } from 'element-plus'
 import {
   TrendCharts,
   Setting,
@@ -322,6 +342,9 @@ import {
 } from '@element-plus/icons-vue'
 import KLineChart from './components/KLineChart.vue'
 
+// KLineChart组件引用
+const klineChartRef = ref<InstanceType<typeof KLineChart> | null>(null)
+
 // 基础响应式数据
 const symbolSearch = ref('')
 const timeframe = ref('15m')
@@ -330,7 +353,14 @@ const isDividerHovered = ref(false)
 
 // 指标状态与弹窗
 const indicatorDialogVisible = ref(false)
-const indicatorState = ref({ ma: true, vol: true, macd: false })
+const indicatorState = ref({ 
+  ma: false, 
+  vol: false, 
+  macd: false,
+  // 自定义指标
+  custom_ma: false,
+  custom_rsi: false
+})
 
 // 调试：监听指标状态变化
 watch(
@@ -340,6 +370,29 @@ watch(
   },
   { deep: true }
 )
+
+// 应用指标设置
+const applyIndicatorSettings = () => {
+  console.log('应用指标设置:', indicatorState.value)
+  
+  // 通过KLineChart组件的ensureIndicator方法应用指标设置
+  if (klineChartRef.value) {
+    // 内置指标
+    klineChartRef.value.ensureIndicator('MA', indicatorState.value.ma)
+    klineChartRef.value.ensureIndicator('VOL', indicatorState.value.vol)
+    klineChartRef.value.ensureIndicator('MACD', indicatorState.value.macd)
+    
+    // 自定义指标
+    klineChartRef.value.ensureIndicator('CUSTOM_MA', indicatorState.value.custom_ma)
+    klineChartRef.value.ensureIndicator('CUSTOM_RSI', indicatorState.value.custom_rsi)
+  }
+  
+  // 关闭弹窗
+  indicatorDialogVisible.value = false
+  
+  // 提示用户
+  ElMessage.success('指标设置已应用')
+}
 
 // 股票信息
 const currentSymbol = ref('BTCUSDT')

@@ -6,6 +6,8 @@
 import { onMounted, onUnmounted, ref, watch } from 'vue';
 import type { PropType } from 'vue';
 import { init, dispose } from 'klinecharts';
+// 导入自定义指标库
+import { registerCustomIndicators, getMainIndicators, getSubIndicators } from '../../../indicators/index.js';
 
 // 事件：打开指标参数设置
 const emit = defineEmits<{
@@ -19,8 +21,8 @@ const props = defineProps({
     default: 'candle'
   },
   indicators: {
-    type: Object as PropType<{ ma: boolean; vol: boolean; macd: boolean }>,
-    default: () => ({ ma: true, vol: true, macd: false })
+    type: Object as PropType<{ ma: boolean; vol: boolean; macd: boolean; custom_ma: boolean; custom_rsi: boolean }>,
+    default: () => ({ ma: false, vol: false, macd: false, custom_ma: false, custom_rsi: false })
   }
 });
 
@@ -42,34 +44,9 @@ function applyIndicatorCalcParams(payload: { paneId: string; name: string; calcP
   chart.overrideIndicator({ name, calcParams }, paneId);
 }
 
-defineExpose({ applyIndicatorCalcParams });
-
-// 根据类型应用图表样式（K线/折线）
-const applyChartType = (type: 'candle' | 'line') => {
-  if (!chart) return;
-  chart.setStyles({
-    candle: {
-      // 使用 area 作为折线/面积样式，后续可扩展至 ohlc 等类型
-      type: type === 'line' ? 'area' : 'candle_solid',
-    }
-  });
-};
-
-// 指标管理对象 - 参考测试HTML的成功实现
-const indicators = {
-  MA: { name: 'MA', visible: false, id: null, isMain: true },
-  VOL: { name: 'VOL', visible: false, id: null, isMain: false },
-  MACD: { name: 'MACD', visible: false, id: null, isMain: false }
-};
-
-// 指标显隐控制 - 使用测试HTML中验证成功的方法
-const ensureIndicator = (name: 'MA' | 'VOL' | 'MACD', enabled: boolean) => {
+// 指标显隐控制 - 支持内置指标和自定义指标
+const ensureIndicator = (name: 'MA' | 'VOL' | 'MACD' | 'CUSTOM_MA' | 'CUSTOM_RSI', enabled: boolean) => {
   console.log(`ensureIndicator called: ${name}, enabled: ${enabled}`);
-  
-  if (!chart) {
-    console.warn('Chart not initialized, skipping ensureIndicator');
-    return;
-  }
   
   const indicator = indicators[name];
   if (!indicator) {
@@ -77,39 +54,36 @@ const ensureIndicator = (name: 'MA' | 'VOL' | 'MACD', enabled: boolean) => {
     return;
   }
   
-  // 如果状态没有变化，直接返回
-  if (enabled === indicator.visible) {
-    console.log(`${name} indicator state unchanged, no action needed`);
+  if (!chart) {
+    console.error('Chart not initialized');
     return;
   }
   
   try {
     if (enabled) {
-      // 添加指标 - 根据官方文档正确设置主图指标
-      console.log(`Creating ${name} indicator, isMain: ${indicator.isMain}`);
-      let id;
-      if (indicator.isMain) {
-        // 主图指标需要指定candle_pane
-        id = chart.createIndicator(
-          indicator.name,
-          true,  // isStack参数
-          { id: 'candle_pane' }  // 指定主图面板ID
-        );
+      // 需要显示指标
+      if (!indicator.visible) {
+        // 创建指标
+        console.log(`Creating indicator: ${name}`);
+        let id;
+        // 根据KLineCharts官方文档，主图指标需要叠加到蜡烛图面板
+        if (indicator.isMain) {
+          // 主图指标，叠加到蜡烛图面板
+          id = chart.createIndicator(indicator.name, true, { id: 'candle_pane' });
+        } else {
+          // 副图指标，创建独立面板
+          id = chart.createIndicator(indicator.name, false);
+        }
+        indicator.id = id;
+        indicator.visible = true;
+        
+        console.log(`Successfully created ${name} indicator with ID: ${id}`);
       } else {
-        // 副图指标使用默认设置
-        id = chart.createIndicator(
-          indicator.name,
-          false,
-          { id: name.toLowerCase() }
-        );
+        console.log(`${name} indicator already visible`);
       }
-      indicator.id = id;
-      indicator.visible = true;
-      
-      console.log(`Successfully created ${name} indicator with ID: ${id}`);
     } else {
-      // 移除指标 - 使用测试HTML中的正确方法
-      if (indicator.id) {
+      // 需要隐藏指标
+      if (indicator.visible && indicator.id) {
         console.log(`Removing ${name} indicator with ID: ${indicator.id}`);
         chart.removeIndicator(indicator.id);
         indicator.id = null;
@@ -117,8 +91,9 @@ const ensureIndicator = (name: 'MA' | 'VOL' | 'MACD', enabled: boolean) => {
         
         console.log(`Successfully removed ${name} indicator`);
       } else {
-        console.log(`${name} indicator ID not found, marking as not visible`);
+        console.log(`${name} indicator already hidden or ID not found`);
         indicator.visible = false;
+        indicator.id = null;
       }
     }
   } catch (error) {
@@ -131,11 +106,84 @@ const ensureIndicator = (name: 'MA' | 'VOL' | 'MACD', enabled: boolean) => {
   console.log(`ensureIndicator ${name} completed, final state: enabled=${enabled}`);
 };
 
+// 指标管理对象 - 包含内置指标和自定义指标
+const indicators = {
+  // 内置指标
+  MA: { name: 'MA', visible: false, id: null, isMain: true },
+  VOL: { name: 'VOL', visible: false, id: null, isMain: false },
+  MACD: { name: 'MACD', visible: false, id: null, isMain: false },
+  // 自定义指标
+  CUSTOM_MA: { name: 'CUSTOM_MA', visible: false, id: null, isMain: true },
+  CUSTOM_RSI: { name: 'CUSTOM_RSI', visible: false, id: null, isMain: false }
+};
+
+// 获取所有指标列表（用于指标选择器）
+const getAllIndicators = () => {
+  const mainIndicators = [
+    { name: 'MA', shortName: 'MA', isMain: true, isCustom: false },
+    { name: 'CUSTOM_MA', shortName: '自定义MA', isMain: true, isCustom: true }
+  ];
+  
+  const subIndicators = [
+    { name: 'VOL', shortName: 'VOL', isMain: false, isCustom: false },
+    { name: 'MACD', shortName: 'MACD', isMain: false, isCustom: false },
+    { name: 'CUSTOM_RSI', shortName: '自定义RSI', isMain: false, isCustom: true }
+  ];
+  
+  return { mainIndicators, subIndicators };
+};
+
+defineExpose({ 
+  applyIndicatorCalcParams,
+  ensureIndicator,
+  getAllIndicators
+});
+
+// 根据类型应用图表样式（K线/折线）
+const applyChartType = (type: 'candle' | 'line') => {
+  if (!chart) return;
+  chart.setStyles({
+    candle: {
+      // 使用 area 作为折线/面积样式，后续可扩展至 ohlc 等类型
+      type: type === 'line' ? 'area' : 'candle_solid',
+    }
+  });
+};
+
+// 注释：defineExpose已在上方处理完成
+
+// 监听indicators属性变化，自动同步指标状态
+watch(
+  () => props.indicators,
+  (newIndicators) => {
+    if (!chart) return;
+    console.log('KLineChart - indicators props changed:', newIndicators);
+    
+    // 同步所有指标状态
+    Object.entries(newIndicators).forEach(([key, enabled]) => {
+      const indicatorName = key.toUpperCase().replace('_', '_'); // MA, VOL, MACD, CUSTOM_MA, CUSTOM_RSI
+      ensureIndicator(indicatorName, enabled);
+    });
+  },
+  { deep: true }
+);
+
 onMounted(() => {
   if (!chartContainer.value) return;
   
   // 初始化图表
   chart = init(chartContainer.value);
+  
+  // 注册自定义指标
+  try {
+    // 导入klinecharts模块用于注册指标
+    import('klinecharts').then(klinecharts => {
+      registerCustomIndicators(klinecharts);
+      console.log('自定义指标注册完成');
+    });
+  } catch (error) {
+    console.error('自定义指标注册失败:', error);
+  }
   // 获取CSS变量值（保留，作为后备），但下方将用 LWC 配色统一覆盖
   const rootStyles = getComputedStyle(document.documentElement);
   const borderColor = rootStyles.getPropertyValue('--el-border-color').trim() || '#2a2e39';
