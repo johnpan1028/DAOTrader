@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>指标板调试页面</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #131722;
+            color: #d1d4dc;
+        }
+        .debug-panel {
+            background: #1e222d;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .test-button {
+            background: #2962ff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .test-button:hover {
+            background: #1e53e5;
+        }
+        .log-area {
+            background: #000;
+            color: #0f0;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <h1>DAOTrader 指标板调试工具</h1>
+    
+    <div class="debug-panel">
+        <h2>测试步骤</h2>
+        <ol>
+            <li>打开主应用: <a href="http://localhost:5173/" target="_blank" style="color: #2962ff;">http://localhost:5173/</a></li>
+            <li>点击顶部工具栏的"指标"按钮</li>
+            <li>在弹窗中勾选/取消勾选指标</li>
+            <li>观察浏览器控制台的调试信息</li>
+            <li>检查K线图是否相应变化</li>
+        </ol>
+    </div>
+    
+    <div class="debug-panel">
+        <h2>预期的控制台输出</h2>
+        <div class="log-area" id="expectedLogs">
+当勾选MA指标时，应该看到：
+Indicators props changed: {ma: true, vol: true, macd: false}
+ensureIndicator called: MA, enabled: true
+Creating indicator: MA
+MA indicator created on main pane
+
+当取消勾选VOL指标时，应该看到：
+Indicators props changed: {ma: true, vol: false, macd: false}
+ensureIndicator called: VOL, enabled: false
+Removing indicator: VOL
+
+当勾选MACD指标时，应该看到：
+Indicators props changed: {ma: true, vol: true, macd: true}
+ensureIndicator called: MACD, enabled: true
+Creating indicator: MACD
+MACD indicator created on sub pane
+        </div>
+    </div>
+    
+    <div class="debug-panel">
+        <h2>常见问题诊断</h2>
+        <ul>
+            <li><strong>如果没有看到"Indicators props changed"日志</strong>：说明App.vue中的indicatorState没有正确传递给KLineChart组件</li>
+            <li><strong>如果看到props changed但没有ensureIndicator调用</strong>：说明watch监听器有问题</li>
+            <li><strong>如果ensureIndicator被调用但指标没有显示</strong>：说明KLineCharts库的API调用有问题</li>
+            <li><strong>如果指标重复创建</strong>：说明ensureIndicator中的移除逻辑有问题</li>
+        </ul>
+    </div>
+    
+    <div class="debug-panel">
+        <h2>快速测试</h2>
+        <button class="test-button" onclick="openMainApp()">打开主应用</button>
+        <button class="test-button" onclick="showInstructions()">显示测试说明</button>
+    </div>
+    
+    <script>
+        function openMainApp() {
+            window.open('http://localhost:5173/', '_blank');
+        }
+        
+        function showInstructions() {
+            alert(`测试指标板交互逻辑：\n\n1. 在主应用中点击"指标"按钮\n2. 勾选/取消勾选指标\n3. 打开浏览器开发者工具(F12)\n4. 查看Console标签页的调试信息\n5. 观察K线图的变化\n\n如果没有看到预期的调试信息，说明指标交互逻辑存在问题。`);
+        }
+        
+        // 页面加载完成后的提示
+        window.onload = function() {
+            console.log('指标板调试页面已加载');
+            console.log('请按照测试步骤进行操作');
+        };
+    </script>
+</body>
+</html>

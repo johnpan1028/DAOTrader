@@ -25,6 +25,8 @@ const props = defineProps({
 });
 
 const chartContainer = ref<HTMLElement | null>(null);
+// 跟踪当前面板ID（用于指标操作）
+const tempPaneId = ref<string>('default');
 // KLineCharts 原版配色：容器背景
 const containerStyle = { width: '100%', height: '100%', backgroundColor: '#131722' } as const;
 let chart: any = null;
@@ -53,29 +55,80 @@ const applyChartType = (type: 'candle' | 'line') => {
   });
 };
 
-// 指标显隐控制
+// 指标管理对象 - 参考测试HTML的成功实现
+const indicators = {
+  MA: { name: 'MA', visible: false, id: null, isMain: true },
+  VOL: { name: 'VOL', visible: false, id: null, isMain: false },
+  MACD: { name: 'MACD', visible: false, id: null, isMain: false }
+};
+
+// 指标显隐控制 - 使用测试HTML中验证成功的方法
 const ensureIndicator = (name: 'MA' | 'VOL' | 'MACD', enabled: boolean) => {
-  if (!chart) return;
-  if (!enabled) {
-    // 若存在则移除（按名称移除所有该名称指标）
-    chart.removeIndicator({ name });
-    // 清除可见性缓存（所有 pane 的该指标）
-    Array.from(indicatorVisibility.keys()).forEach(k => {
-      if (k.endsWith(`:${name}`)) indicatorVisibility.delete(k);
-    });
+  console.log(`ensureIndicator called: ${name}, enabled: ${enabled}`);
+  
+  if (!chart) {
+    console.warn('Chart not initialized, skipping ensureIndicator');
     return;
   }
-  // 先移除避免重复创建
-  chart.removeIndicator({ name });
-  if (name === 'MA') {
-    chart.createIndicator('MA', true, { id: 'candle_pane' });
-    indicatorVisibility.set('candle_pane:MA', true);
-  } else {
-    chart.createIndicator(name, false);
-    // 非主图指标由库自动放入新面板，无法直接得知 paneId，这里先标记默认可见，点击时以事件中的 paneId 为准覆盖
-    // 先放置一个占位键，以名称作为后缀。
-    indicatorVisibility.set(`unknown:${name}`, true);
+  
+  const indicator = indicators[name];
+  if (!indicator) {
+    console.error(`Unknown indicator: ${name}`);
+    return;
   }
+  
+  // 如果状态没有变化，直接返回
+  if (enabled === indicator.visible) {
+    console.log(`${name} indicator state unchanged, no action needed`);
+    return;
+  }
+  
+  try {
+    if (enabled) {
+      // 添加指标 - 根据官方文档正确设置主图指标
+      console.log(`Creating ${name} indicator, isMain: ${indicator.isMain}`);
+      let id;
+      if (indicator.isMain) {
+        // 主图指标需要指定candle_pane
+        id = chart.createIndicator(
+          indicator.name,
+          true,  // isStack参数
+          { id: 'candle_pane' }  // 指定主图面板ID
+        );
+      } else {
+        // 副图指标使用默认设置
+        id = chart.createIndicator(
+          indicator.name,
+          false,
+          { id: name.toLowerCase() }
+        );
+      }
+      indicator.id = id;
+      indicator.visible = true;
+      
+      console.log(`Successfully created ${name} indicator with ID: ${id}`);
+    } else {
+      // 移除指标 - 使用测试HTML中的正确方法
+      if (indicator.id) {
+        console.log(`Removing ${name} indicator with ID: ${indicator.id}`);
+        chart.removeIndicator(indicator.id);
+        indicator.id = null;
+        indicator.visible = false;
+        
+        console.log(`Successfully removed ${name} indicator`);
+      } else {
+        console.log(`${name} indicator ID not found, marking as not visible`);
+        indicator.visible = false;
+      }
+    }
+  } catch (error) {
+    console.error(`Error in ensureIndicator for ${name}:`, error);
+    // 重置状态以保持一致性
+    indicator.visible = false;
+    indicator.id = null;
+  }
+  
+  console.log(`ensureIndicator ${name} completed, final state: enabled=${enabled}`);
 };
 
 onMounted(() => {
@@ -296,10 +349,13 @@ onMounted(() => {
   // 应用初始图表类型
   applyChartType(props.chartType);
 
-  // 根据初始 props 创建指标
-  ensureIndicator('MA', !!props.indicators?.ma);
-  ensureIndicator('VOL', !!props.indicators?.vol);
-  ensureIndicator('MACD', !!props.indicators?.macd);
+  // 图表初始化完成后，根据初始 props 创建指标
+  console.log('Applying initial indicators:', props.indicators);
+  if (props.indicators) {
+    ensureIndicator('MA', !!props.indicators.ma);
+    ensureIndicator('VOL', !!props.indicators.vol);
+    ensureIndicator('MACD', !!props.indicators.macd);
+  }
 
   // 订阅 tooltip 图标点击事件
   chart.subscribeAction('onTooltipIconClick', (payload: any) => {
@@ -308,18 +364,24 @@ onMounted(() => {
       if (!iconId) return;
       // 指标图标
       if (indicatorName && typeof indicatorName === 'string' && indicatorName.length > 0) {
-        const key = `${paneId}:${indicatorName}`;
         switch (iconId) {
           case 'toggle_visibility': {
-            const next = !(indicatorVisibility.get(key) ?? true);
-            indicatorVisibility.set(key, next);
+            // 使用正确的API查询当前指标的可见性状态
+            const targetIndicator = chart.getIndicatorByPaneId(paneId, indicatorName);
+            const currentVisible = targetIndicator?.visible ?? true;
+            const next = !currentVisible;
+            console.log(`Toggle visibility for ${indicatorName} in pane ${paneId}: ${next}`);
             // 使用 paneId 作用域覆盖指定指标可见性
             chart.overrideIndicator({ name: indicatorName, visible: next }, paneId);
             break;
           }
           case 'remove_indicator': {
-            chart.removeIndicator({ name: indicatorName, paneId });
-            indicatorVisibility.delete(key);
+            // 检查指标是否已存在
+        const existingIndicator = chart.getIndicatorByPaneId(paneId, indicatorName);
+        const indicatorExists = !!existingIndicator;
+            if (indicatorExists) {
+              chart.removeIndicator({ name: indicatorName, paneId });
+            }
             break;
           }
           case 'settings': {
@@ -400,7 +462,8 @@ watch(
 watch(
   () => props.indicators,
   (val) => {
-    if (!val) return;
+    console.log('Indicators props changed:', val);
+    if (!val || !chart) return;
     ensureIndicator('MA', !!val.ma);
     ensureIndicator('VOL', !!val.vol);
     ensureIndicator('MACD', !!val.macd);

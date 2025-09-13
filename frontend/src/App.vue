@@ -332,6 +332,15 @@ const isDividerHovered = ref(false)
 const indicatorDialogVisible = ref(false)
 const indicatorState = ref({ ma: true, vol: true, macd: false })
 
+// 调试：监听指标状态变化
+watch(
+  indicatorState,
+  (newVal, oldVal) => {
+    console.log('App.vue - indicatorState changed:', { old: oldVal, new: newVal })
+  },
+  { deep: true }
+)
+
 // 股票信息
 const currentSymbol = ref('BTCUSDT')
 const currentPrice = ref('43,250.50')
