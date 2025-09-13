@@ -128,9 +128,9 @@
             overflow: 'hidden'
           }"
         >
-          <el-container direction="vertical" :style="{ height: '100%', overflow: 'hidden' }">
+          <el-container direction="vertical" :style="{ height: '100%', overflow: 'hidden', position: 'relative' }">
             <!-- 上方：K线图表区域 -->
-            <el-main :style="{ padding: '0', flex: '1', overflow: 'hidden' }">
+            <el-main :style="klineAreaStyle">
               <KLineChart ref="klineChartRef" :chart-type="chartType as any" :indicators="indicatorState" />
             </el-main>
             
@@ -138,18 +138,7 @@
             <el-divider 
               direction="horizontal"
               class="resize-handle"
-              :style="{
-                height: '4px',
-                background: 'var(--tv-border-primary)',
-                border: 'none',
-                cursor: isBottomResizing ? 'grabbing' : 'grab',
-                transition: 'background 0.2s',
-                position: 'relative',
-                zIndex: 10,
-                flexShrink: 0,
-                userSelect: 'none',
-                margin: '0'
-              }"
+              :style="dividerStyle"
               @mousedown="startBottomResize"
 
             >
@@ -169,15 +158,7 @@
             
             <!-- 底部：标签页容器 -->
             <el-footer 
-              :height="bottomPanelHeight + 'px'" 
-              :style="{ 
-                background: 'var(--tv-bg-secondary)', 
-                padding: '0',
-                minHeight: '25px',
-                overflow: 'hidden',
-                flexShrink: 0,
-                borderTop: '1px solid var(--tv-border-primary)'
-              }"
+              :style="bottomFooterStyle"
             >
               <div class="bottom-tabs-container">
                 <el-tabs 
@@ -421,6 +402,53 @@ const startWidth = ref(0)
 const bottomPanelHeight = ref(40) // 默认为最小化状态
 const isBottomResizing = ref(false)
 
+// 新增：视口高度与覆盖/锁定逻辑
+const windowHeight = ref(window.innerHeight)
+const overlayThreshold = computed(() => Math.floor(windowHeight.value * 0.5)) // 底部高度超过视口50%时进入覆盖模式
+const isBottomOverlay = computed(() => bottomPanelHeight.value > overlayThreshold.value)
+const lockedKlineHeight = computed(() => {
+  const headerHeightConst = 44
+  const resizerHeightConst = 4
+  const containerHeight = windowHeight.value - headerHeightConst
+  // 最小高度保护为100px，避免过小
+  return Math.max(100, containerHeight - overlayThreshold.value - resizerHeightConst)
+})
+
+// 根据是否覆盖模式，动态计算样式
+const klineAreaStyle = computed(() => {
+  return isBottomOverlay.value
+    ? { padding: '0', overflow: 'hidden', height: lockedKlineHeight.value + 'px', flex: 'none' }
+    : { padding: '0', overflow: 'hidden', flex: '1' }
+})
+
+const dividerStyle = computed(() => {
+  const base = {
+    height: '4px',
+    background: 'var(--tv-border-primary)',
+    border: 'none',
+    cursor: isBottomResizing.value ? 'grabbing' : 'grab',
+    transition: 'background 0.2s',
+    userSelect: 'none',
+    margin: '0'
+  } as any
+  return isBottomOverlay.value
+    ? { ...base, zIndex: 30, position: 'absolute', left: 0, right: 0, bottom: bottomPanelHeight.value + 'px' }
+    : { ...base, zIndex: 10, position: 'relative', flexShrink: 0 }
+})
+
+const bottomFooterStyle = computed(() => {
+  const base = {
+    background: 'var(--tv-bg-secondary)',
+    padding: '0',
+    minHeight: '25px',
+    overflow: 'hidden',
+    borderTop: '1px solid var(--tv-border-primary)',
+    height: bottomPanelHeight.value + 'px'
+  } as any
+  return isBottomOverlay.value
+    ? { ...base, position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 20, width: '100%' }
+    : { ...base, flexShrink: 0 }
+})
 const startY = ref(0)
 const startHeight = ref(0)
 const minBottomHeight = 40 // 调整最小高度为40px
@@ -539,6 +567,7 @@ onMounted(() => {
   // 监听窗口大小变化
   const handleResize = () => {
     windowWidth.value = window.innerWidth
+    windowHeight.value = window.innerHeight
     // 更新底部面板最大高度
     maxBottomHeight.value = window.innerHeight - headerHeight - minChartHeight
     // 确保当前高度不超过新的最大值
