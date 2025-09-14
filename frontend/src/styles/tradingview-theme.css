@@ -76,6 +76,15 @@
   --el-input-hover-border-color: var(--tv-border-secondary);
   --el-input-focus-border-color: var(--tv-primary);
   --el-input-text-color: var(--tv-text-primary);
+
+  /* 确保 Dialog 背景为深色（避免回退为白色） */
+  --el-dialog-bg-color: var(--tv-bg-overlay);
+
+  /* 确保遮罩为深色而非白色 */
+  --el-overlay-color-lighter: rgba(0, 0, 0, 0.5);
+  --el-overlay-color: rgba(0, 0, 0, 0.8);
+  --el-popup-modal-bg-color: var(--el-color-black);
+  --el-popup-modal-opacity: 0.5;
   
   --el-button-bg-color: var(--tv-bg-overlay);
   --el-button-border-color: var(--tv-border-primary);

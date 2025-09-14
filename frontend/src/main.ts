@@ -4,6 +4,9 @@ import ElementPlus from 'element-plus'
 import 'element-plus/dist/index.css'
 import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 
+// 引入 TradingView 主题覆盖，确保在 Element Plus 之后
+import './styles/tradingview-theme.css'
+
 const app = createApp(App)
 
 // 注册Element Plus

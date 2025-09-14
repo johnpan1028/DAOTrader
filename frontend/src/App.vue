@@ -10,94 +10,52 @@
         boxShadow: 'none'
       }"
     >
-      <el-row justify="space-between" align="middle" :style="{ height: '100%' }">
-        <!-- 左侧：品牌 + 股票信息 -->
-        <el-col :span="8">
-          <el-space>
-            <el-space :size="8" align="center">
-               <el-icon size="20" color="var(--el-color-primary)"><TrendCharts /></el-icon>
-               <el-text size="default" tag="b" :style="{ color: 'var(--tv-accent-primary)', fontWeight: 'bold' }">DAOTrader</el-text>
-             </el-space>
-            <el-divider direction="vertical" :style="{ borderColor: 'var(--el-border-color-light)' }" />
-            <el-space direction="vertical" :size="4">
-              <el-input 
-                v-model="symbolSearch" 
-                placeholder="搜索品种" 
-                size="small"
-                :style="{ width: '140px' }"
-                :prefix-icon="Search"
-                clearable
-              />
-              <el-space :size="8" align="center">
-                <el-text size="small" :style="{ color: 'var(--tv-text-primary)' }">{{ currentSymbol }}</el-text>
-                <el-text size="small" :style="{ color: priceChangeClass === 'positive' ? 'var(--el-color-success)' : 'var(--el-color-danger)' }">{{ currentPrice }}</el-text>
-                <el-text size="small" :style="{ color: priceChangeClass === 'positive' ? 'var(--el-color-success)' : 'var(--el-color-danger)' }">{{ priceChange }}</el-text>
-              </el-space>
-            </el-space>
-          </el-space>
-        </el-col>
-        
-        <!-- 中央：时间周期 + 图表类型 -->
-        <el-col :span="8" :style="{ textAlign: 'center' }">
-          <el-space>
-            <el-radio-group 
-              v-model="timeframe" 
-              size="small" 
-              :style="{ 
-                background: 'var(--tv-bg-tertiary)', 
-                borderRadius: '6px', 
-                padding: '2px' 
-              }"
-            >
-              <el-radio-button value="1m">1m</el-radio-button>
-              <el-radio-button value="5m">5m</el-radio-button>
-              <el-radio-button value="15m">15m</el-radio-button>
-              <el-radio-button value="1h">1h</el-radio-button>
-              <el-radio-button value="1d">1D</el-radio-button>
-            </el-radio-group>
-            
-            <el-button-group 
-              size="small" 
-              :style="{ 
-                background: 'var(--tv-bg-tertiary)', 
-                borderRadius: '6px', 
-                padding: '2px' 
-              }"
-            >
-              <el-button 
-                :type="chartType === 'candle' ? 'primary' : ''" 
-                @click="chartType = 'candle'"
-                :icon="Grid"
-                :style="{ 
-                  background: chartType === 'candle' ? 'var(--tv-accent-primary)' : 'transparent',
-                  color: chartType === 'candle' ? 'var(--tv-text-on-accent)' : 'var(--tv-text-secondary)',
-                  border: 'none'
-                }"
-              />
-              <el-button 
-                :type="chartType === 'line' ? 'primary' : ''" 
-                @click="chartType = 'line'"
-                :icon="Connection"
-                :style="{ 
-                  background: chartType === 'line' ? 'var(--tv-accent-primary)' : 'transparent',
-                  color: chartType === 'line' ? 'var(--tv-text-on-accent)' : 'var(--tv-text-secondary)',
-                  border: 'none'
-                }"
-              />
-            </el-button-group>
-          </el-space>
-        </el-col>
-        
-        <!-- 右侧：功能按钮 -->
-        <el-col :span="8" :style="{ textAlign: 'right' }">
-          <el-space>
-            <el-button size="small" :icon="DataAnalysis" text @click="indicatorDialogVisible = true">指标</el-button>
-            <el-button size="small" :icon="Camera" text>截图</el-button>
-            <el-button size="small" :icon="Setting" text />
-            <el-button size="small" :icon="FullScreen" text @click="toggleFullscreen" />
-          </el-space>
-        </el-col>
-      </el-row>
+      <!-- 顶栏：从左到右布局（品牌 | 合约 | 时间粒度 | 图表类型 | 功能按钮） -->
+      <div :style="{ display: 'flex', alignItems: 'center', height: '100%', gap: '10px' }">
+        <!-- 品牌 -->
+        <el-space :size="8" align="center">
+          <el-icon size="20" color="var(--el-color-primary)"><TrendCharts /></el-icon>
+          <el-text size="default" tag="b" :style="{ color: 'var(--tv-accent-primary)', fontWeight: 'bold' }">DAOTrader |</el-text>
+        </el-space>
+
+        <el-divider direction="vertical" :style="{ borderColor: 'var(--el-border-color-light)', margin: '0 6px' }" />
+
+        <!-- 当前合约简称（点击弹出搜索栏） -->
+        <el-tag size="small" type="warning" effect="dark" style="cursor: pointer;" @click="symbolSearchDialogVisible = true">{{ currentSymbol }}</el-tag>
+
+        <el-divider direction="vertical" :style="{ borderColor: 'var(--el-border-color-light)', margin: '0 6px' }" />
+
+        <!-- 时间粒度组 -->
+        <el-radio-group 
+          v-model="timeframe" 
+          size="small" 
+          :style="{ background: 'var(--tv-bg-overlay)', borderRadius: '6px', padding: '2px' }"
+        >
+          <el-radio-button value="1m">1m</el-radio-button>
+          <el-radio-button value="5m">5m</el-radio-button>
+          <el-radio-button value="15m">15m</el-radio-button>
+          <el-radio-button value="1H">1H</el-radio-button>
+          <el-radio-button value="2H">2H</el-radio-button>
+          <el-radio-button value="4H">4H</el-radio-button>
+          <el-radio-button value="D">D</el-radio-button>
+          <el-radio-button value="W">W</el-radio-button>
+          <el-radio-button value="M">M</el-radio-button>
+          <el-radio-button value="Y">Y</el-radio-button>
+        </el-radio-group>
+
+
+
+        <div style="flex: 1 1 auto"></div>
+
+        <!-- 功能按钮：指标 / 时区 / 设置 / 截图 / 全屏 -->
+        <el-space>
+          <el-button size="small" :icon="DataAnalysis" text @click="indicatorDialogVisible = true">指标</el-button>
+          <el-button size="small" :icon="Timer" text>时区</el-button>
+          <el-button size="small" :icon="Setting" text>设置</el-button>
+          <el-button size="small" :icon="Camera" text>截图</el-button>
+          <el-button size="small" :icon="FullScreen" text @click="toggleFullscreen">全屏</el-button>
+        </el-space>
+      </div>
     </el-header>
 
     <!-- 主体内容区 -->
@@ -269,41 +227,139 @@
     <!-- 指标弹窗 -->
     <el-dialog v-model="indicatorDialogVisible" title="技术指标" width="420px" append-to-body>
       <div>
+        <!-- 主图指标 -->
         <el-divider content-position="left">主图指标</el-divider>
         <div style="margin-bottom: 16px;">
-          <div style="margin-bottom: 8px; color: #909399; font-size: 12px;">内置指标</div>
+          <div style="margin-bottom: 8px; color: var(--el-text-color-regular); font-size: 12px;">内置指标</div>
           <el-checkbox v-model="indicatorState.ma" style="display: block; margin-bottom: 8px;">MA(移动平均线)</el-checkbox>
           <el-checkbox disabled style="display: block; margin-bottom: 8px;">EMA(未来可扩展)</el-checkbox>
           <el-checkbox disabled style="display: block; margin-bottom: 8px;">BOLL(未来可扩展)</el-checkbox>
         </div>
         <div style="margin-bottom: 16px;">
-          <div style="margin-bottom: 8px; color: #409EFF; font-size: 12px;">自定义指标</div>
+          <div style="margin-bottom: 8px; color: var(--el-color-primary); font-size: 12px;">自定义指标</div>
           <el-checkbox v-model="indicatorState.custom_ma" style="display: block; margin-bottom: 8px;">
-            <span style="color: #409EFF;">自定义MA</span>
+            <span class="custom-indicator-label" :class="{ active: indicatorState.custom_ma }">自定义XMA</span>
             <el-tag size="small" type="info" style="margin-left: 8px;">自定义</el-tag>
           </el-checkbox>
         </div>
-        
+
+        <!-- 副图指标 -->
         <el-divider content-position="left">副图指标</el-divider>
         <div style="margin-bottom: 16px;">
-          <div style="margin-bottom: 8px; color: #909399; font-size: 12px;">内置指标</div>
+          <div style="margin-bottom: 8px; color: var(--el-text-color-regular); font-size: 12px;">内置指标</div>
           <el-checkbox v-model="indicatorState.vol" style="display: block; margin-bottom: 8px;">VOL(成交量)</el-checkbox>
           <el-checkbox v-model="indicatorState.macd" style="display: block; margin-bottom: 8px;">MACD</el-checkbox>
         </div>
         <div>
-          <div style="margin-bottom: 8px; color: #409EFF; font-size: 12px;">自定义指标</div>
+          <div style="margin-bottom: 8px; color: var(--el-color-primary); font-size: 12px;">自定义指标</div>
           <el-checkbox v-model="indicatorState.custom_rsi" style="display: block; margin-bottom: 8px;">
-            <span style="color: #409EFF;">自定义RSI</span>
+            <span class="custom-indicator-label" :class="{ active: indicatorState.custom_rsi }">自定义X RSI</span>
             <el-tag size="small" type="info" style="margin-left: 8px;">自定义</el-tag>
           </el-checkbox>
         </div>
       </div>
-      <template #footer>
-        <span class="dialog-footer">
-          <el-button @click="indicatorDialogVisible = false">关闭</el-button>
-          <el-button type="primary" @click="applyIndicatorSettings">应用设置</el-button>
-        </span>
-      </template>
+    </el-dialog>
+
+    <!-- 金融商品搜索弹窗 -->
+    <el-dialog
+      v-model="symbolSearchDialogVisible"
+      title="商品代码搜索"
+      width="800px"
+      :modal="true"
+      :close-on-click-modal="true"
+      :close-on-press-escape="true"
+      class="symbol-search-dialog"
+      :show-close="true"
+      append-to-body
+    >
+      <div class="search-container">
+        <!-- 搜索框 -->
+        <div class="search-header">
+          <el-input
+            v-model="searchKeyword"
+            placeholder="输入商品代码或名称搜索..."
+            :prefix-icon="Search"
+            clearable
+            class="search-input"
+            size="large"
+          />
+        </div>
+        
+        <!-- 分类标签 -->
+        <div class="category-tabs">
+          <el-button
+            v-for="category in categories"
+            :key="category.key"
+            :type="selectedCategory === category.key ? 'primary' : 'default'"
+            :plain="selectedCategory !== category.key"
+            size="small"
+            @click="selectedCategory = category.key"
+            class="category-btn"
+          >
+            {{ category.label }}
+          </el-button>
+        </div>
+        
+        <!-- 筛选器 -->
+        <div class="filter-section">
+          <el-select
+            v-model="selectedCountry"
+            placeholder="所有国家/地区"
+            size="small"
+            class="filter-select"
+            clearable
+          >
+            <el-option label="所有国家/地区" value="" />
+            <el-option label="美国" value="US" />
+            <el-option label="中国" value="CN" />
+            <el-option label="日本" value="JP" />
+          </el-select>
+          
+          <el-select
+            v-model="selectedType"
+            placeholder="所有类型"
+            size="small"
+            class="filter-select"
+            clearable
+          >
+            <el-option label="所有类型" value="" />
+            <el-option label="现货" value="spot" />
+            <el-option label="期货" value="futures" />
+            <el-option label="期权" value="options" />
+          </el-select>
+        </div>
+        
+        <!-- 商品列表 -->
+        <div class="symbol-list-container">
+          <div class="loading-indicator" v-if="isLoading">
+            <el-icon class="is-loading"><Loading /></el-icon>
+            <span>加载中...</span>
+          </div>
+          
+          <div class="symbol-list" v-else>
+            <div
+              v-for="symbol in filteredSymbols"
+              :key="symbol.code"
+              class="symbol-item"
+              @click="selectSymbol(symbol.code)"
+              :class="{ 'selected': symbol.code === currentSymbol }"
+            >
+              <div class="symbol-main">
+                <div class="symbol-code">{{ symbol.code }}</div>
+                <div class="symbol-name">{{ symbol.name }}</div>
+              </div>
+              <div class="symbol-meta">
+                <span class="symbol-type">{{ symbol.type }}</span>
+                <span class="symbol-exchange">{{ symbol.exchange }}</span>
+              </div>
+            </div>
+          </div>
+          
+          <div class="empty-state" v-if="!isLoading && filteredSymbols.length === 0">
+            <el-empty description="未找到匹配的商品" :image-size="80" />
+          </div>
+        </div>
+      </div>
     </el-dialog>
   </el-container>
 </template>
@@ -321,7 +377,9 @@ import {
   DataAnalysis,
   Camera,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  Timer,
+  Loading
 } from '@element-plus/icons-vue'
 import KLineChart from './components/KLineChart.vue'
 
@@ -336,6 +394,78 @@ const chartType = ref<'candle' | 'line'>('candle')
 
 // 指标状态与弹窗
 const indicatorDialogVisible = ref(false)
+
+// 金融商品搜索弹窗
+const symbolSearchDialogVisible = ref(false)
+const searchKeyword = ref('')
+const selectedCategory = ref('all')
+const selectedCountry = ref('')
+const selectedType = ref('')
+const isLoading = ref(false)
+
+const categories = ref([
+  { key: 'all', label: '全部' },
+  { key: 'stocks', label: '股票' },
+  { key: 'futures', label: '期货' },
+  { key: 'forex', label: '外汇' },
+  { key: 'crypto', label: '加密货币' },
+  { key: 'indices', label: '指数' },
+  { key: 'commodities', label: '商品' },
+  { key: 'bonds', label: '债券' }
+])
+
+const searchResults = ref([
+  { code: 'BTCUSDT', name: '比特币/USDT', type: '现货', exchange: 'Binance', category: 'crypto', country: 'US' },
+  { code: 'ETHUSDT', name: '以太坊/USDT', type: '现货', exchange: 'Binance', category: 'crypto', country: 'US' },
+  { code: 'BNBUSDT', name: 'BNB/USDT', type: '现货', exchange: 'Binance', category: 'crypto', country: 'US' },
+  { code: 'ADAUSDT', name: 'ADA/USDT', type: '现货', exchange: 'Binance', category: 'crypto', country: 'US' },
+  { code: 'SOLUSDT', name: 'SOL/USDT', type: '现货', exchange: 'Binance', category: 'crypto', country: 'US' },
+  { code: 'DOGEUSDT', name: '狗狗币/USDT', type: '现货', exchange: 'Binance', category: 'crypto', country: 'US' },
+  { code: 'XRPUSDT', name: 'XRP/USDT', type: '现货', exchange: 'Binance', category: 'crypto', country: 'US' },
+  { code: 'DOTUSDT', name: 'DOT/USDT', type: '现货', exchange: 'Binance', category: 'crypto', country: 'US' },
+  { code: 'AAPL', name: '苹果公司', type: '股票', exchange: 'NASDAQ', category: 'stocks', country: 'US' },
+  { code: 'TSLA', name: '特斯拉', type: '股票', exchange: 'NASDAQ', category: 'stocks', country: 'US' },
+  { code: 'MSFT', name: '微软', type: '股票', exchange: 'NASDAQ', category: 'stocks', country: 'US' },
+  { code: 'GOOGL', name: '谷歌', type: '股票', exchange: 'NASDAQ', category: 'stocks', country: 'US' },
+  { code: 'CL', name: '原油期货', type: '期货', exchange: 'NYMEX', category: 'commodities', country: 'US' },
+  { code: 'GC', name: '黄金期货', type: '期货', exchange: 'COMEX', category: 'commodities', country: 'US' },
+  { code: 'EURUSD', name: '欧元/美元', type: '外汇', exchange: 'Forex', category: 'forex', country: 'US' },
+  { code: 'GBPUSD', name: '英镑/美元', type: '外汇', exchange: 'Forex', category: 'forex', country: 'US' },
+  { code: 'SPX', name: '标普500指数', type: '指数', exchange: 'CBOE', category: 'indices', country: 'US' },
+  { code: 'NDX', name: '纳斯达克100指数', type: '指数', exchange: 'NASDAQ', category: 'indices', country: 'US' }
+])
+
+const filteredResults = computed(() => {
+  let filtered = searchResults.value
+  
+  // 按分类筛选
+  if (selectedCategory.value !== 'all') {
+    filtered = filtered.filter(symbol => symbol.category === selectedCategory.value)
+  }
+  
+  // 按国家筛选
+  if (selectedCountry.value) {
+    filtered = filtered.filter(symbol => symbol.country === selectedCountry.value)
+  }
+  
+  // 按类型筛选
+  if (selectedType.value) {
+    filtered = filtered.filter(symbol => symbol.type === selectedType.value)
+  }
+  
+  // 按搜索关键词筛选
+  if (searchKeyword.value) {
+    const keyword = searchKeyword.value.toLowerCase()
+    filtered = filtered.filter(symbol => 
+      symbol.code.toLowerCase().includes(keyword) ||
+      symbol.name.toLowerCase().includes(keyword)
+    )
+  }
+  
+  return filtered
+})
+
+const filteredSymbols = filteredResults
 const indicatorState = ref({ 
   ma: false, 
   vol: false, 
@@ -350,9 +480,30 @@ watch(
   indicatorState,
   (newVal, oldVal) => {
     console.log('App.vue - indicatorState changed:', { old: oldVal, new: newVal })
+    // 勾选即生效：同步到图表
+    if (klineChartRef.value) {
+      // 内置指标
+      klineChartRef.value.ensureIndicator('MA', !!newVal.ma)
+      klineChartRef.value.ensureIndicator('VOL', !!newVal.vol)
+      klineChartRef.value.ensureIndicator('MACD', !!newVal.macd)
+      // 自定义指标
+      klineChartRef.value.ensureIndicator('CUSTOM_MA', !!newVal.custom_ma)
+      klineChartRef.value.ensureIndicator('CUSTOM_RSI', !!newVal.custom_rsi)
+    }
   },
   { deep: true }
 )
+
+// 选择金融商品
+const selectSymbol = (symbol: string) => {
+  currentSymbol.value = symbol
+  symbolSearchDialogVisible.value = false
+  searchKeyword.value = ''
+  selectedCategory.value = 'all'
+  selectedCountry.value = ''
+  selectedType.value = ''
+  ElMessage.success(`已切换到 ${symbol}`)
+}
 
 // 应用指标设置
 const applyIndicatorSettings = () => {
@@ -587,9 +738,6 @@ onMounted(() => {
 
 <style>
 /* 引入TradingView主题样式 */
-@import './styles/tradingview-theme.css';
-
-/* 全局样式重置 */
 * {
   box-sizing: border-box;
 }
@@ -634,6 +782,252 @@ html, body {
   top: 0;
   left: 0;
 }
+/* 金融商品搜索弹窗样式 - 使用更强的选择器 */
+.symbol-search-dialog :deep(.el-overlay) {
+  background: rgba(0, 0, 0, 0.8) !important;
+}
+
+.symbol-search-dialog :deep(.el-dialog) {
+  background: var(--tv-bg-secondary) !important;
+  border: none !important;
+  border-radius: 8px !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6) !important;
+  margin: 0 !important;
+}
+
+.symbol-search-dialog :deep(.el-dialog__wrapper) {
+  background: transparent !important;
+}
+
+.symbol-search-dialog :deep(.el-dialog__header) {
+  background: var(--tv-bg-secondary) !important;
+  border-bottom: 1px solid var(--tv-border-primary) !important;
+  padding: 16px 20px !important;
+}
+
+.symbol-search-dialog :deep(.el-dialog__title) {
+  color: var(--tv-text-primary) !important;
+  font-size: 16px !important;
+  font-weight: 500 !important;
+}
+
+.symbol-search-dialog :deep(.el-dialog__headerbtn) {
+  background: transparent !important;
+  border: none !important;
+}
+
+.symbol-search-dialog :deep(.el-dialog__close) {
+  color: var(--tv-text-secondary) !important;
+  font-size: 18px !important;
+}
+
+.symbol-search-dialog :deep(.el-dialog__close:hover) {
+  color: var(--tv-text-primary) !important;
+}
+
+.symbol-search-dialog :deep(.el-dialog__body) {
+  padding: 0 !important;
+  background: var(--tv-bg-secondary) !important;
+}
+
+.symbol-search-dialog :deep(.search-container .search-header) {
+  padding: 16px 20px !important;
+  border-bottom: 1px solid var(--tv-border-primary) !important;
+}
+
+.symbol-search-dialog :deep(.search-container .category-tabs) {
+  padding: 12px 20px !important;
+  border-bottom: 1px solid var(--tv-border-primary) !important;
+  display: flex !important;
+  gap: 8px !important;
+  flex-wrap: wrap !important;
+}
+
+.symbol-search-dialog :deep(.search-container .filter-section) {
+  padding: 12px 20px !important;
+  border-bottom: 1px solid var(--tv-border-primary) !important;
+  display: flex !important;
+  gap: 12px !important;
+}
+  
+.symbol-search-dialog :deep(.search-container .symbol-list-container) {
+  height: 400px !important;
+}
+
+.symbol-search-dialog :deep(.search-container .loading-indicator) {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  height: 100% !important;
+  color: var(--tv-text-secondary) !important;
+  gap: 8px !important;
+}
+
+.symbol-search-dialog :deep(.search-container .symbol-list) {
+  height: 100% !important;
+  overflow-y: auto !important;
+  padding: 8px 0 !important;
+}
+
+.symbol-search-dialog :deep(.search-container .symbol-list::-webkit-scrollbar) {
+  width: 6px !important;
+}
+
+.symbol-search-dialog :deep(.search-container .symbol-list::-webkit-scrollbar-track) {
+  background: var(--tv-bg-overlay) !important;
+}
+
+.symbol-search-dialog :deep(.search-container .symbol-list::-webkit-scrollbar-thumb) {
+  background: var(--tv-border-secondary) !important;
+  border-radius: 3px !important;
+}
+
+.symbol-search-dialog :deep(.search-container .symbol-list::-webkit-scrollbar-thumb:hover) {
+  background: var(--tv-border-light) !important;
+}
+
+.symbol-search-dialog :deep(.search-container .symbol-item) {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  padding: 12px 20px !important;
+  cursor: pointer !important;
+  transition: all 0.2s !important;
+  border-left: 3px solid transparent !important;
+}
+
+.symbol-search-dialog :deep(.search-container .symbol-item:hover) {
+  background: var(--tv-bg-hover) !important;
+}
+
+.symbol-search-dialog :deep(.search-container .symbol-item.selected) {
+  background: var(--tv-primary-light) !important;
+  border-left-color: var(--tv-primary) !important;
+}
+
+.symbol-search-dialog :deep(.search-container .symbol-main) {
+  flex: 1 !important;
+}
+
+.symbol-search-dialog :deep(.search-container .symbol-code) {
+  font-weight: 600 !important;
+  color: var(--tv-text-primary) !important;
+  font-size: 14px !important;
+  margin-bottom: 2px !important;
+}
+
+.symbol-search-dialog :deep(.search-container .symbol-name) {
+  font-size: 12px !important;
+  color: var(--tv-text-secondary) !important;
+}
+
+.symbol-search-dialog :deep(.search-container .symbol-meta) {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-end !important;
+  gap: 2px !important;
+}
+
+.symbol-search-dialog :deep(.search-container .symbol-type) {
+  font-size: 11px !important;
+  color: var(--tv-text-disabled) !important;
+  background: var(--tv-bg-overlay) !important;
+  padding: 2px 6px !important;
+  border-radius: 2px !important;
+}
+
+.symbol-search-dialog :deep(.search-container .symbol-exchange) {
+  font-size: 10px !important;
+  color: var(--tv-text-secondary) !important;
+}
+
+.symbol-search-dialog :deep(.search-container .empty-state) {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  height: 100% !important;
+  color: var(--tv-text-secondary) !important;
+}
+
+.symbol-search-dialog :deep(.search-input) {
+  .el-input__wrapper {
+    background: var(--tv-bg-overlay) !important;
+    border: 1px solid var(--tv-border-primary) !important;
+    box-shadow: none !important;
+    
+    &:hover {
+      border-color: var(--tv-border-secondary) !important;
+    }
+    
+    &.is-focus {
+      border-color: var(--tv-primary) !important;
+    }
+  }
+  
+  .el-input__inner {
+    color: var(--tv-text-primary) !important;
+    
+    &::placeholder {
+      color: var(--tv-text-secondary) !important;
+    }
+  }
+  
+  .el-input__prefix {
+    color: var(--tv-text-secondary) !important;
+  }
+}
+
+.symbol-search-dialog :deep(.category-btn) {
+  height: 28px !important;
+  padding: 0 12px !important;
+  font-size: 12px !important;
+  border-radius: 4px !important;
+  
+  &.el-button--default {
+    background: transparent !important;
+    border-color: var(--tv-border-primary) !important;
+    color: var(--tv-text-secondary) !important;
+    
+    &:hover {
+      background: var(--tv-bg-hover) !important;
+      border-color: var(--tv-border-secondary) !important;
+      color: var(--tv-text-primary) !important;
+    }
+  }
+  
+  &.el-button--primary {
+    background: var(--tv-primary) !important;
+    border-color: var(--tv-primary) !important;
+    color: var(--tv-text-inverse) !important;
+  }
+}
+
+.symbol-search-dialog :deep(.filter-select) {
+  width: 140px !important;
+  
+  .el-select__wrapper {
+    background: var(--tv-bg-overlay) !important;
+    border: 1px solid var(--tv-border-primary) !important;
+    box-shadow: none !important;
+    
+    &:hover {
+      border-color: var(--tv-border-secondary) !important;
+    }
+    
+    &.is-focus {
+      border-color: var(--tv-primary) !important;
+    }
+  }
+  
+  .el-select__placeholder {
+    color: var(--tv-text-secondary) !important;
+  }
+  
+  .el-select__selected-item {
+    color: var(--tv-text-primary) !important;
+  }
+}
+
 </style>
 
 <style scoped>
@@ -642,10 +1036,10 @@ html, body {
 :root {
   --el-bg-color: var(--tv-bg-secondary);
   --el-bg-color-page: var(--tv-bg-primary);
-  --el-bg-color-overlay: var(--tv-bg-tertiary);
+  --el-bg-color-overlay: var(--tv-bg-overlay);
   --el-text-color-primary: var(--tv-text-primary);
   --el-text-color-regular: var(--tv-text-secondary);
-  --el-text-color-secondary: var(--tv-text-tertiary);
+  --el-text-color-secondary: var(--tv-text-secondary);
   --el-border-color: var(--tv-border-primary);
   --el-border-color-light: var(--tv-border-secondary);
   --el-color-primary: var(--tv-accent-primary);
@@ -819,7 +1213,7 @@ body.resizing * {
 }
 
 :deep(.el-button) {
-  --el-button-bg-color: var(--tv-bg-tertiary);
+  --el-button-bg-color: var(--tv-bg-overlay);
   --el-button-border-color: var(--tv-border-primary);
   --el-button-text-color: var(--tv-text-primary);
   --el-button-hover-bg-color: var(--tv-accent-primary);
@@ -834,7 +1228,7 @@ body.resizing * {
 
 :deep(.el-radio-button) {
   --el-radio-button-checked-bg-color: var(--el-color-primary);
-  --el-radio-button-checked-text-color: #ffffff;
+  --el-radio-button-checked-text-color: var(--tv-text-inverse);
   --el-radio-button-bg-color: var(--el-bg-color-overlay);
   --el-radio-button-text-color: var(--el-text-color-regular);
 }
@@ -892,9 +1286,6 @@ body.resizing * {
     font-size: 14px;
   }
 }
-</style>
-
-
 
 /* 拖拽状态样式 */
 .resizing {
@@ -1009,4 +1400,11 @@ body.resizing * {
 
 
 
-  
+.custom-indicator-label {
+  color: var(--el-text-color-primary);
+  transition: color .15s ease;
+}
+.custom-indicator-label.active {
+  color: var(--el-color-primary);
+}
+</style>

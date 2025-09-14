@@ -30,7 +30,7 @@ const chartContainer = ref<HTMLElement | null>(null);
 // 跟踪当前面板ID（用于指标操作）
 const tempPaneId = ref<string>('default');
 // KLineCharts 原版配色：容器背景
-const containerStyle = { width: '100%', height: '100%', backgroundColor: '#131722' } as const;
+const containerStyle = { width: '100%', height: '100%', backgroundColor: 'var(--tv-bg-primary)' } as const;
 let chart: any = null;
 let ws: WebSocket | null = null;
 let hasInitialData = false;
@@ -220,7 +220,7 @@ onMounted(async () => {
   })();
 
   // KLineCharts 原版默认配色（与副图保持一致）
-  const KLINE_BG = '#131722';
+  const KLINE_BG = (rootStyles.getPropertyValue('--tv-bg-primary').trim() || '#131722');
   const KLINE_GRID = '#292929';
   const KLINE_TEXT = '#FFFFFF';
   const KLINE_TEXT_SECONDARY = '#FFFFFF';
