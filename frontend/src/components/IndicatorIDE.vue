@@ -351,7 +351,6 @@ import { maiLangCompiler } from '@/utils/maiLangCompiler'
 import { init as initKLineChart, dispose as disposeKLineChart } from 'klinecharts'
 
 // 响应式数据
-const editorContainer = ref(null)
 const chartContainer = ref(null)
 const chatMessagesContainer = ref(null)
 
@@ -402,8 +401,8 @@ const selectedIndicatorId = ref(null)
 const selectedFileNode = ref(null)
 
 // 编辑器和图表实例
-let editor = null
 let chart = null
+const closingTabs = new Set() // 正在关闭的标签页集合
 
 // 编译结果
 const compiledResult = ref(null)
@@ -567,22 +566,26 @@ if (CROSS(LOWER, CLOSE)) {
 
 // 组件挂载
 onMounted(async () => {
-  await initEditor()
+  await nextTick()
+  await initMonacoLanguage()
   loadSavedIndicators()
 })
 
 // 组件卸载
 onUnmounted(() => {
-  if (editor) {
+  // 清理所有编辑器实例
+  editorRefs.value.forEach(editor => {
     editor.dispose()
-  }
+  })
+  editorRefs.value.clear()
+  
   if (chart) {
     disposeKLineChart(chart)
   }
 })
 
-// 初始化编辑器
-async function initEditor() {
+// 初始化Monaco语言配置
+async function initMonacoLanguage() {
   // 注册麦语言
   monaco.languages.register({ id: 'mailang' })
   
@@ -693,32 +696,19 @@ async function initEditor() {
     }
   })
   
-  // 创建编辑器
-  editor = monaco.editor.create(editorContainer.value, {
-    value: templateCodes.custom,
-    language: 'mailang',
-    theme: 'mailang-theme',
-    fontSize: 14,
-    minimap: { enabled: false },
-    scrollBeyondLastLine: false,
-    automaticLayout: true,
-    wordWrap: 'on',
-    lineNumbers: 'on',
-    glyphMargin: true,
-    folding: true,
-    lineDecorationsWidth: 10,
-    lineNumbersMinChars: 3
-  })
-  
-  // 监听内容变化
-  editor.onDidChangeModelContent(() => {
-    // 清除之前的编译结果
-    compiledResult.value = null
-  })
+  // Monaco语言配置完成
+}
+
+// 获取当前活跃的编辑器实例
+function getCurrentEditor() {
+  if (!activeEditorTab.value) return null
+  const editorData = editorRefs.value.get(activeEditorTab.value)
+  return editorData?.editor || null
 }
 
 // 编译代码
 function compileCode() {
+  const editor = getCurrentEditor()
   if (!editor) return
   
   compiling.value = true
@@ -813,6 +803,9 @@ function generateMockData(count) {
 
 // 保存指标
 function saveIndicator() {
+  const editor = getCurrentEditor()
+  if (!editor) return
+  
   if (!compiledResult.value?.success) {
     ElMessage.warning('请先编译成功后再保存')
     return
@@ -884,6 +877,7 @@ function confirmLoad() {
   if (!indicator) return
   
   // 加载代码到编辑器
+  const editor = getCurrentEditor()
   if (editor) {
     editor.setValue(indicator.code)
   }
@@ -928,6 +922,7 @@ function loadTemplate() {
   if (!selectedTemplate.value) return
   
   const code = templateCodes[selectedTemplate.value]
+  const editor = getCurrentEditor()
   if (code && editor) {
     editor.setValue(code)
     compiledResult.value = null
@@ -936,6 +931,7 @@ function loadTemplate() {
 
 // 格式化代码
 function formatCode() {
+  const editor = getCurrentEditor()
   if (editor) {
     editor.getAction('editor.action.formatDocument').run()
   }
@@ -972,9 +968,12 @@ function sendMessage() {
     })
     
     // 如果有生成的代码，应用到编辑器
-    if (response.code && editor) {
-      editor.setValue(response.code)
-    }
+    if (response.code) {
+        const editor = getCurrentEditor()
+        if (editor) {
+          editor.setValue(response.code)
+        }
+      }
     
     aiProcessing.value = false
     
@@ -1080,43 +1079,81 @@ function openFileInEditor(fileData) {
 }
 
 function closeTab(tabId) {
+  // 防止重复关闭
+  if (closingTabs.has(tabId)) return
+  
   const tabIndex = editorTabs.value.findIndex(tab => tab.id === tabId)
   if (tabIndex === -1) return
   
   const tab = editorTabs.value[tabIndex]
+  if (!tab) return
+  
+  closingTabs.add(tabId)
   
   // 如果有未保存的更改，提示用户
   if (!tab.saved) {
     ElMessageBox.confirm('文件有未保存的更改，确定要关闭吗？', '确认关闭', {
-      type: 'warning'
-    }).then(() => {
-      doCloseTab(tabId, tabIndex)
-    }).catch(() => {})
+      type: 'warning',
+      beforeClose: (action, instance, done) => {
+        if (action === 'confirm') {
+          doCloseTab(tabId, tabIndex)
+        }
+        done()
+      }
+    }).catch(() => {
+       // 用户取消关闭，清理关闭状态
+       closingTabs.delete(tabId)
+     })
   } else {
     doCloseTab(tabId, tabIndex)
   }
 }
 
 function doCloseTab(tabId, tabIndex) {
-  // 销毁编辑器实例
-  const editorInstance = editorRefs.value.get(tabId)
-  if (editorInstance) {
-    editorInstance.dispose()
-    editorRefs.value.delete(tabId)
-  }
-  
-  // 移除标签页
-  editorTabs.value.splice(tabIndex, 1)
-  
-  // 如果关闭的是当前活动标签页，切换到其他标签页
+  // 先切换活动标签页，避免在销毁过程中访问已销毁的编辑器
   if (activeEditorTab.value === tabId) {
-    if (editorTabs.value.length > 0) {
-      const newIndex = Math.min(tabIndex, editorTabs.value.length - 1)
+    if (editorTabs.value.length > 1) {
+      const newIndex = tabIndex === 0 ? 1 : tabIndex - 1
       activeEditorTab.value = editorTabs.value[newIndex].id
     } else {
       activeEditorTab.value = ''
     }
   }
+  
+  // 获取编辑器实例并销毁
+  const editorData = editorRefs.value.get(tabId)
+  if (editorData) {
+    try {
+      // 先销毁所有事件监听器
+      if (editorData.disposables) {
+        editorData.disposables.forEach(disposable => {
+          try {
+            disposable.dispose()
+          } catch (e) {
+            console.warn('销毁事件监听器时出错:', e)
+          }
+        })
+      }
+      
+      // 销毁编辑器模型和实例
+      if (editorData.editor) {
+        editorData.editor.getModel()?.dispose()
+        editorData.editor.dispose()
+      }
+    } catch (error) {
+      console.warn('编辑器销毁时出错:', error)
+    }
+    editorRefs.value.delete(tabId)
+  }
+  
+  // 使用nextTick确保编辑器完全销毁后再移除DOM
+  nextTick(() => {
+    // 移除标签页
+    editorTabs.value.splice(tabIndex, 1)
+    
+    // 清理关闭状态
+    closingTabs.delete(tabId)
+  })
 }
 
 
@@ -1146,14 +1183,17 @@ function initTabEditor(tabId) {
   })
   
   // 监听内容变化
-  editorInstance.onDidChangeModelContent(() => {
+  const contentChangeDisposable = editorInstance.onDidChangeModelContent(() => {
     tab.code = editorInstance.getValue()
     tab.saved = false
     compiledResult.value = null
   })
   
-  // 存储编辑器实例
-  editorRefs.value.set(tabId, editorInstance)
+  // 存储编辑器实例和事件监听器
+  editorRefs.value.set(tabId, {
+    editor: editorInstance,
+    disposables: [contentChangeDisposable]
+  })
 }
 
 // 文件操作方法
