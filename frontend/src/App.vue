@@ -121,7 +121,6 @@
               <div class="bottom-tabs-container">
                 <el-tabs 
                   v-model="activeTab" 
-                  type="card"
                   :style="{
                     height: '100%',
                     '--el-tabs-header-height': '40px'
@@ -1334,59 +1333,46 @@ body.resizing * {
 }
 
 :deep(.bottom-tabs .el-tabs__item) {
-  height: 28px;
-  line-height: 28px;
-  padding: 0 12px;
-  margin-right: 8px;
-  border: 1px solid var(--tv-border-primary);
-  border-radius: 4px;
-  background: var(--tv-bg-primary);
-  color: var(--tv-text-primary);
-  font-size: 12px;
-  transition: all 0.2s;
+  height: 32px !important;
+  padding: 0 10px !important;
+  margin: 4px 4px !important; /* 在 40px header 内垂直置中：4+32+4 */
+  display: inline-flex !important; /* 确保文字在 pill 内垂直居中 */
+  align-items: center !important;
+  justify-content: center !important; /* 水平居中 */
+  border: none !important;
+  border-radius: 6px !important;
+  background: transparent !important;
+  color: var(--tv-text-secondary) !important;
+  font-size: 13px !important;
+  line-height: 1 !important; /* 重置行高 */
+  vertical-align: middle !important;
+  transition: color .2s ease, background .2s ease !important;
 }
 
-/* 底部面板控制按钮样式 */
-.bottom-panel-controls {
-  position: absolute;
-  top: 0;
-  right: 0;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  padding-right: 8px;
-  z-index: 10;
-}
-
-.panel-toggle-btn {
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--tv-text-secondary);
-  border-radius: 4px;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.panel-toggle-btn:hover {
-  background: var(--tv-accent-primary-alpha);
-  color: var(--tv-text-primary);
+/* 重置标签内文字节点样式 */
+:deep(.bottom-tabs .el-tabs__item span) {
+  display: inline-block !important;
+  line-height: 1 !important;
+  vertical-align: middle !important;
 }
 
 :deep(.bottom-tabs .el-tabs__item:hover) {
-  background: var(--tv-accent-primary);
-  color: white;
-  border-color: var(--tv-accent-primary);
+  background: rgba(255, 255, 255, 0.06); /* 浅色圆角矩形填充 */
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08); /* 轻微内描边增强对比 */
+  color: var(--tv-text-primary);
 }
 
 :deep(.bottom-tabs .el-tabs__item.is-active) {
+  background: transparent !important;
+  color: #ffffff !important; /* 激活时文字改为白色 */
+  font-weight: 600 !important;
+}
+
+/* 线型标签下的活动条（下划线） */
+:deep(.bottom-tabs .el-tabs__active-bar) {
   background: var(--tv-accent-primary);
-  color: white;
-  border-color: var(--tv-accent-primary);
+  height: 2px;
+  border-radius: 1px;
 }
 
 :deep(.bottom-tabs .el-tabs__content) {
