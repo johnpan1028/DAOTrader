@@ -127,16 +127,7 @@
                   }"
                   class="bottom-tabs"
                 >
-                  <div class="bottom-panel-controls">
-                    <el-button
-                      :icon="isBottomMaximized ? ArrowDown : ArrowUp"
-                      size="small"
-                      text
-                      @click="toggleBottomPanel"
-                      :title="isBottomMaximized ? '最小化' : '最大化'"
-                      class="panel-toggle-btn"
-                    />
-                  </div>
+
                 <el-tab-pane label="策略测试" name="strategy">
                   <div :style="{ 
                     height: 'calc(100% - 40px)', 
@@ -179,6 +170,21 @@
                     padding: '8px'
                   }">
                     交易面板内容区域 (高度: {{ bottomPanelHeight }}px)
+                  </div>
+                </el-tab-pane>
+                
+                <el-tab-pane label="指标管理" name="indicators">
+                  <div :style="{ 
+                    height: 'calc(100% - 40px)', 
+                    color: 'var(--tv-text-primary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '14px',
+                    overflow: 'hidden',
+                    padding: '8px'
+                  }">
+                    指标管理内容区域
                   </div>
                 </el-tab-pane>
               </el-tabs>
@@ -375,8 +381,6 @@ import {
   Connection,
   DataAnalysis,
   Camera,
-  ArrowUp,
-  ArrowDown,
   Timer,
   Loading
 } from '@element-plus/icons-vue'
@@ -606,8 +610,6 @@ const maxBottomHeight = ref(0) // 将在mounted中计算
 
 // 底部标签页控制
 const activeTab = ref('trading') // 默认激活交易面板
-const isBottomMaximized = ref(false) // 底部面板最大化状态
-const previousBottomHeight = ref(200) // 记录之前的高度
 
 // 底部面板拖拽调整方法
 const startBottomResize = (event: MouseEvent) => {
@@ -645,19 +647,7 @@ const stopBottomResize = () => {
   document.removeEventListener('mouseup', stopBottomResize)
 }
 
-// 底部面板最大化/最小化切换
-const toggleBottomPanel = () => {
-  if (isBottomMaximized.value) {
-    // 从最大化状态恢复到之前的高度
-    bottomPanelHeight.value = previousBottomHeight.value
-    isBottomMaximized.value = false
-  } else {
-    // 保存当前高度并最大化
-    previousBottomHeight.value = bottomPanelHeight.value
-    bottomPanelHeight.value = maxBottomHeight.value
-    isBottomMaximized.value = true
-  }
-}
+
 
 // 拖拽调整大小方法（仅右边栏）
 const startResize = (type: string, event: MouseEvent) => {
@@ -1115,16 +1105,17 @@ body.resizing * {
   width: 40px;
   height: 40px;
   padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--tv-text-secondary);
+  border: 1px solid var(--el-button-border-color);
+  background: var(--el-button-bg-color);
+  color: var(--el-button-text-color);
   border-radius: 4px;
   transition: all 0.2s ease;
 }
 
 .toolbar-btn:hover {
-  background: var(--tv-accent-primary-alpha);
-  color: var(--tv-text-primary);
+  background: var(--el-button-hover-bg-color);
+  border-color: var(--el-button-hover-border-color);
+  color: var(--el-button-hover-text-color);
 }
 
 .toolbar-btn.el-button--primary {
@@ -1132,10 +1123,7 @@ body.resizing * {
   color: var(--tv-text-on-accent);
 }
 
-.toolbar-btn.el-button--primary:hover {
-  background: var(--tv-accent-primary);
-  opacity: 0.8;
-}
+
 
 /* 中央内容区域 - TradingView风格 */
 .central-content {
@@ -1215,14 +1203,39 @@ body.resizing * {
   --el-button-bg-color: var(--tv-bg-overlay);
   --el-button-border-color: var(--tv-border-primary);
   --el-button-text-color: var(--tv-text-primary);
-  --el-button-hover-bg-color: var(--tv-accent-primary);
-  --el-button-hover-text-color: var(--tv-text-on-accent);
 }
+
+
 
 :deep(.el-button--primary) {
   --el-button-bg-color: var(--tv-accent-primary);
   --el-button-border-color: var(--tv-accent-primary);
   --el-button-text-color: var(--tv-text-on-accent);
+}
+
+/* Header按钮样式 - 使用全局按钮变量 */
+.el-header :deep(.el-button.is-text) {
+  background-color: var(--el-button-bg-color) !important;
+  border: 1px solid var(--el-button-border-color) !important;
+  color: var(--el-button-text-color) !important;
+  transition: all 0.2s ease !important;
+}
+
+.el-header :deep(.el-button.is-text:hover) {
+  background-color: var(--el-button-hover-bg-color) !important;
+  border-color: var(--el-button-hover-border-color) !important;
+  color: var(--el-button-hover-text-color) !important;
+}
+
+.el-header :deep(.el-button.is-text:active) {
+  background-color: var(--el-button-active-bg-color) !important;
+  border-color: var(--el-button-active-border-color) !important;
+}
+
+.el-header :deep(.el-button.is-text:focus) {
+  background-color: var(--el-button-hover-bg-color) !important;
+  border-color: var(--el-button-hover-border-color) !important;
+  color: var(--el-button-hover-text-color) !important;
 }
 
 :deep(.el-radio-button) {
@@ -1393,4 +1406,7 @@ body.resizing * {
 .custom-indicator-label.active {
   color: var(--el-color-primary);
 }
+
+
+
 </style>

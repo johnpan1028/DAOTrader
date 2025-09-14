@@ -86,11 +86,18 @@
   --el-popup-modal-bg-color: var(--el-color-black);
   --el-popup-modal-opacity: 0.5;
   
-  --el-button-bg-color: var(--tv-bg-overlay);
-  --el-button-border-color: var(--tv-border-primary);
+  --el-button-bg-color: transparent;
+  --el-button-border-color: transparent;
   --el-button-text-color: var(--tv-text-secondary);
-  --el-button-hover-bg-color: var(--tv-bg-hover);
+  --el-button-hover-bg-color: transparent;
+  --el-button-hover-border-color: var(--tv-border-secondary);
   --el-button-hover-text-color: var(--tv-text-primary);
+  --el-button-active-bg-color: transparent;
+  --el-button-active-border-color: var(--tv-primary);
+  
+  /* 覆盖 Element Plus 默认的 fill 颜色变量，避免 text 按钮悬停时显示白色背景 */
+  --el-fill-color-light: transparent;
+  --el-fill-color: transparent;
   
   --el-card-bg-color: var(--tv-bg-overlay);
   --el-card-border-color: var(--tv-border-primary);
