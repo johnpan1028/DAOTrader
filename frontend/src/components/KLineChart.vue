@@ -222,8 +222,8 @@ onMounted(async () => {
   // KLineCharts 原版默认配色（与副图保持一致）
   const KLINE_BG = (rootStyles.getPropertyValue('--tv-bg-primary').trim() || '#131722');
   const KLINE_GRID = '#292929';
-  const KLINE_TEXT = '#FFFFFF';
-  const KLINE_TEXT_SECONDARY = '#FFFFFF';
+  const KLINE_TEXT = '#ffffff';  // 坐标数字、时间、指标名称使用白色
+  const KLINE_TEXT_SECONDARY = '#cccccc';  // 次要文本使用浅灰色
   const KLINE_UP = '#2DC08E';     // klinecharts 原版绿色
   const KLINE_DOWN = '#F92855';   // klinecharts 原版红色
   const KLINE_NEUTRAL = '#888888'; // klinecharts 原版灰色
@@ -249,11 +249,11 @@ onMounted(async () => {
     crosshair: {
       horizontal: {
         line: { color: KLINE_TEXT },
-        text: { backgroundColor: '#373a40', borderColor: '#373a40', color: KLINE_TEXT }
+        text: { backgroundColor: 'var(--tv-bg-overlay)', borderColor: 'var(--tv-bg-overlay)', color: KLINE_TEXT }
       },
       vertical: {
         line: { color: KLINE_TEXT },
-        text: { backgroundColor: '#373a40', borderColor: '#373a40', color: KLINE_TEXT }
+        text: { backgroundColor: 'var(--tv-bg-overlay)', borderColor: 'var(--tv-bg-overlay)', color: KLINE_TEXT }
       }
     },
     candle: {

@@ -173,18 +173,16 @@
                   </div>
                 </el-tab-pane>
                 
-                <el-tab-pane label="指标管理" name="indicators">
+
+                
+                <el-tab-pane label="指标编程" name="indicator-ide">
                   <div :style="{ 
                     height: 'calc(100% - 40px)', 
                     color: 'var(--tv-text-primary)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '14px',
                     overflow: 'hidden',
-                    padding: '8px'
+                    padding: '0'
                   }">
-                    指标管理内容区域
+                    <IndicatorIDE />
                   </div>
                 </el-tab-pane>
               </el-tabs>
@@ -385,6 +383,10 @@ import {
   Loading
 } from '@element-plus/icons-vue'
 import KLineChart from './components/KLineChart.vue'
+import IndicatorIDE from './components/IndicatorIDE.vue'
+
+
+
 
 // KLineChart组件引用
 const klineChartRef = ref<InstanceType<typeof KLineChart> | null>(null)
@@ -1377,7 +1379,7 @@ body.resizing * {
 
 :deep(.bottom-tabs .el-tabs__item.is-active) {
   background: transparent !important;
-  color: #ffffff !important; /* 激活时文字改为白色 */
+  color: var(--tv-text-primary) !important; /* 激活时文字改为白色 */
   font-weight: 600 !important;
 }
 
