@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "vegatrader-frontend": "file:.."
+  }
+}

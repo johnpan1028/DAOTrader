@@ -3,8 +3,6 @@
     <!-- 顶部工具栏 -->
     <div class="ide-toolbar">
       <div class="toolbar-left">
-
-        
         <el-button-group>
           <el-tooltip content="新建指标文件">
             <el-button :icon="DocumentAdd" @click="createNewFile" size="small">新建</el-button>
@@ -20,39 +18,32 @@
           </el-tooltip>
         </el-button-group>
         
-        <el-divider direction="vertical" />
-        
-        <el-select 
-          v-model="selectedTemplate" 
-          placeholder="选择模板"
-          @change="loadTemplate"
-          size="small"
-          style="width: 150px"
-        >
-          <el-option 
-            v-for="template in templates" 
-            :key="template.value" 
-            :label="template.label" 
-            :value="template.value"
-          />
-        </el-select>
+        <el-button-group style="margin-left: 8px;">
+          <el-tooltip content="撤销">
+            <el-button :icon="RefreshLeft" @click="undoEdit" size="small" :disabled="!activeEditorTab">撤销</el-button>
+          </el-tooltip>
+          <el-tooltip content="清空">
+            <el-button :icon="DeleteFilled" @click="clearEditor" size="small" :disabled="!activeEditorTab">清空</el-button>
+          </el-tooltip>
+          <el-tooltip content="保存">
+            <el-button :icon="FolderAdd" @click="saveIndicator" size="small" :disabled="!activeEditorTab">保存</el-button>
+          </el-tooltip>
+          <el-tooltip content="编译">
+            <el-button :icon="CompileIcon" @click="compileCode" size="small" :disabled="!activeEditorTab">编译</el-button>
+          </el-tooltip>
+          <el-tooltip content="加载">
+            <el-button :icon="LoadIcon" @click="loadIndicator" size="small">加载</el-button>
+          </el-tooltip>
+          <el-tooltip content="移除">
+            <el-button :icon="CloseBold" @click="removeIndicator" size="small" :disabled="!activeEditorTab">移除</el-button>
+          </el-tooltip>
+          <el-tooltip content="收藏">
+            <el-button :icon="Star" @click="favoriteIndicator" size="small" :disabled="!activeEditorTab">收藏</el-button>
+          </el-tooltip>
+        </el-button-group>
       </div>
       
       <div class="toolbar-right">
-        <el-tooltip content="格式化代码">
-          <el-button 
-            :icon="MagicStick" 
-            size="small" 
-            @click="formatCode"
-          />
-        </el-tooltip>
-        <el-tooltip content="全屏编辑">
-          <el-button 
-            :icon="FullScreen" 
-            size="small" 
-            @click="toggleFullscreen"
-          />
-        </el-tooltip>
       </div>
     </div>
     
@@ -96,166 +87,18 @@
         </div>
       </div>
       
-      <!-- 右侧IDE区域 -->
-      <div class="ide-right-panel">
-        <!-- 编辑器区域 -->
-        <div class="editor-section">
-          <div class="editor-tabs">
-            <el-tabs 
-              v-model="activeEditorTab" 
-              type="card" 
-              closable
-              @tab-remove="closeTab"
-            >
-              <el-tab-pane 
-                v-for="tab in editorTabs" 
-                :key="tab.id" 
-                :label="tab.name" 
-                :name="tab.id"
-              >
-                <div class="tab-editor-container" :data-tab-id="tab.id">
-                  <!-- Monaco Editor 将在这里挂载 -->
-                </div>
-              </el-tab-pane>
-            </el-tabs>
-            
-            <!-- 默认欢迎页面 -->
-            <div v-if="editorTabs.length === 0" class="welcome-panel">
-              <div class="welcome-content">
-                <h3>欢迎使用指标编程IDE</h3>
-                <p>请从左侧文件树选择文件开始编辑，或创建新的指标文件。</p>
-                <el-button type="primary" @click="newIndicator">创建新指标</el-button>
-              </div>
-            </div>
-          </div>
-          
-          <!-- 编译结果面板 -->
-          <div class="compile-result" v-if="compiledResult">
-            <div class="result-header">
-              <span :class="['result-status', compiledResult.success ? 'success' : 'error']">
-                <el-icon><Check v-if="compiledResult.success" /><Close v-else /></el-icon>
-                {{ compiledResult.success ? '编译成功' : '编译失败' }}
-              </span>
-            </div>
-            
-            <div class="result-content" v-if="!compiledResult.success">
-              <pre class="error-message">{{ compiledResult.error }}</pre>
-            </div>
-            
-            <div class="result-content" v-else>
-              <el-tabs v-model="activeResultTab">
-                <el-tab-pane label="JavaScript" name="js">
-                  <pre class="code-output">{{ compiledResult.jsCode }}</pre>
-                </el-tab-pane>
-                <el-tab-pane label="VNPY格式" name="vnpy">
-                  <pre class="code-output">{{ JSON.stringify(compiledResult.vnpyIndicator, null, 2) }}</pre>
-                </el-tab-pane>
-                <el-tab-pane label="KLineChart格式" name="kline">
-                  <pre class="code-output">{{ JSON.stringify(compiledResult.klineIndicator, null, 2) }}</pre>
-                </el-tab-pane>
-              </el-tabs>
-            </div>
-          </div>
+      <!-- 右侧新容器 -->
+      <div class="right-panel">
+        <div class="panel-header">
+          <h3>功能面板</h3>
         </div>
-        
-        <!-- AI助手输入条 -->
-        <div class="ai-input-panel">
-          <div class="ai-input-header">
-            <span>AI助手</span>
-            <el-button 
-              :icon="ChatDotRound" 
-              size="small" 
-              @click="toggleAIPanel"
-              :type="showAIPanel ? 'primary' : 'default'"
-            >
-              {{ showAIPanel ? '收起' : '展开' }}
-            </el-button>
-          </div>
-          
-          <!-- AI聊天面板 -->
-          <div class="ai-chat-panel" v-show="showAIPanel">
-            <div class="chat-messages" ref="chatMessagesContainer">
-              <div 
-                v-for="(message, index) in chatMessages" 
-                :key="index" 
-                :class="['message', message.type]"
-              >
-                <div class="message-content">
-                  {{ message.content }}
-                </div>
-                <div class="message-time">
-                  {{ formatTime(message.timestamp) }}
-                </div>
-              </div>
-            </div>
-            
-            <div class="chat-input">
-              <el-input 
-                v-model="chatInput" 
-                type="textarea" 
-                :rows="2" 
-                placeholder="描述你想要的指标，例如：创建一个双均线交叉指标，快线周期5，慢线周期20"
-                @keydown.ctrl.enter="sendMessage"
-              />
-              <div class="input-actions">
-                <el-button 
-                  type="primary" 
-                  size="small"
-                  @click="sendMessage"
-                  :loading="aiProcessing"
-                >
-                  发送 (Ctrl+Enter)
-                </el-button>
-              </div>
-            </div>
-          </div>
+        <div class="panel-content">
+          <p>这里可以添加其他功能模块</p>
         </div>
       </div>
     </div>
     
-    <!-- AI对话框 -->
-    <el-dialog 
-      v-model="showAIDialog" 
-      title="AI指标助手" 
-      width="600px"
-      :before-close="handleAIDialogClose"
-    >
-      <div class="ai-chat">
-        <div class="chat-messages" ref="chatMessagesContainer">
-          <div 
-            v-for="(message, index) in chatMessages" 
-            :key="index" 
-            :class="['message', message.type]"
-          >
-            <div class="message-content">
-              {{ message.content }}
-            </div>
-            <div class="message-time">
-              {{ formatTime(message.timestamp) }}
-            </div>
-          </div>
-        </div>
-        
-        <div class="chat-input">
-          <el-input 
-            v-model="chatInput" 
-            type="textarea" 
-            :rows="3" 
-            placeholder="描述你想要的指标，例如：创建一个双均线交叉指标，快线周期5，慢线周期20"
-            @keydown.ctrl.enter="sendMessage"
-          />
-          <div class="input-actions">
-            <el-button 
-              type="primary" 
-              @click="sendMessage"
-              :loading="aiProcessing"
-            >
-              发送 (Ctrl+Enter)
-            </el-button>
-          </div>
-        </div>
-      </div>
-    </el-dialog>
+
     
     <!-- 保存对话框 -->
     <el-dialog v-model="showSaveDialog" title="保存指标" width="400px">
@@ -328,13 +171,15 @@
 <script setup>
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+
+// 定义emit事件
+const emit = defineEmits(['show-indicator-dialog'])
 import {
   CaretRight,
   VideoPlay,
   Download,
   FolderOpened,
   DocumentAdd,
-  ChatDotRound,
   MagicStick,
   FullScreen,
   Close,
@@ -344,15 +189,22 @@ import {
   Document,
   CopyDocument,
   Delete,
-  Edit
+  Edit,
+  RefreshLeft,
+  DeleteFilled,
+  FolderAdd,
+  CaretRight as CompileIcon,
+  FolderOpened as LoadIcon,
+  CloseBold,
+  Star
 } from '@element-plus/icons-vue'
 import * as monaco from 'monaco-editor'
 import { maiLangCompiler } from '@/utils/maiLangCompiler'
+import { indicatorsManager } from '@/utils/indicatorsManager'
 import { init as initKLineChart, dispose as disposeKLineChart } from 'klinecharts'
 
 // 响应式数据
 const chartContainer = ref(null)
-const chatMessagesContainer = ref(null)
 
 // 文件树相关
 const fileTreeData = ref([
@@ -388,15 +240,10 @@ const editorRefs = ref(new Map())
 
 const compiling = ref(false)
 const showPreview = ref(false)
-const showAIDialog = ref(false)
 const showSaveDialog = ref(false)
 const showLoadDialog = ref(false)
-const aiProcessing = ref(false)
-const showAIPanel = ref(false)
 
-const selectedTemplate = ref('')
 const activeResultTab = ref('js')
-const chatInput = ref('')
 const selectedIndicatorId = ref(null)
 const selectedFileNode = ref(null)
 
@@ -407,14 +254,7 @@ const closingTabs = new Set() // 正在关闭的标签页集合
 // 编译结果
 const compiledResult = ref(null)
 
-// 聊天消息
-const chatMessages = ref([
-  {
-    type: 'assistant',
-    content: '你好！我是AI指标助手，可以帮你生成麦语言指标代码。请描述你想要的指标功能。',
-    timestamp: Date.now()
-  }
-])
+
 
 // 保存表单
 const saveForm = ref({
@@ -426,143 +266,9 @@ const saveForm = ref({
 // 已保存的指标
 const savedIndicators = ref([])
 
-// 模板列表
-const templates = ref([
-  { label: '双均线', value: 'dual_ma' },
-  { label: 'MACD', value: 'macd' },
-  { label: 'RSI', value: 'rsi' },
-  { label: 'KDJ', value: 'kdj' },
-  { label: '布林带', value: 'boll' },
-  { label: '自定义', value: 'custom' }
-])
 
-// 模板代码
-const templateCodes = {
-  dual_ma: `// 双均线指标
-// 参数定义
-parameter MA1_PERIOD = 5;    // 短期均线周期
-parameter MA2_PERIOD = 20;   // 长期均线周期
 
-// 计算均线
-MA1 = MA(CLOSE, MA1_PERIOD);
-MA2 = MA(CLOSE, MA2_PERIOD);
 
-// 输出线条
-DRAWLINE(MA1, COLOR_YELLOW, "短期均线");
-DRAWLINE(MA2, COLOR_BLUE, "长期均线");
-
-// 交易信号
-if (CROSS(MA1, MA2)) {
-    DRAWICON(LOW, ICON_UP, "金叉买入");
-}
-if (CROSS(MA2, MA1)) {
-    DRAWICON(HIGH, ICON_DOWN, "死叉卖出");
-}`,
-  
-  macd: `// MACD指标
-// 参数定义
-parameter FAST_PERIOD = 12;  // 快线周期
-parameter SLOW_PERIOD = 26;  // 慢线周期
-parameter SIGNAL_PERIOD = 9; // 信号线周期
-
-// 计算MACD
-DIF = EMA(CLOSE, FAST_PERIOD) - EMA(CLOSE, SLOW_PERIOD);
-DEA = EMA(DIF, SIGNAL_PERIOD);
-MACD_HIST = (DIF - DEA) * 2;
-
-// 输出线条
-DRAWLINE(DIF, COLOR_BLUE, "DIF");
-DRAWLINE(DEA, COLOR_YELLOW, "DEA");
-DRAWHIST(MACD_HIST, COLOR_RED, COLOR_GREEN, "MACD柱");
-
-// 零轴线
-DRAWLINE(0, COLOR_GRAY, "零轴");`,
-  
-  rsi: `// RSI指标
-// 参数定义
-parameter RSI_PERIOD = 14;   // RSI周期
-parameter OVERBOUGHT = 70;   // 超买线
-parameter OVERSOLD = 30;     // 超卖线
-
-// 计算RSI
-RSI_VALUE = RSI(CLOSE, RSI_PERIOD);
-
-// 输出线条
-DRAWLINE(RSI_VALUE, COLOR_BLUE, "RSI");
-DRAWLINE(OVERBOUGHT, COLOR_RED, "超买线");
-DRAWLINE(OVERSOLD, COLOR_GREEN, "超卖线");
-
-// 背景色
-if (RSI_VALUE > OVERBOUGHT) {
-    DRAWBAND(RSI_VALUE, OVERBOUGHT, COLOR_RED_ALPHA);
-}
-if (RSI_VALUE < OVERSOLD) {
-    DRAWBAND(OVERSOLD, RSI_VALUE, COLOR_GREEN_ALPHA);
-}`,
-  
-  kdj: `// KDJ指标
-// 参数定义
-parameter KDJ_PERIOD = 9;    // KDJ周期
-parameter K_SMOOTH = 3;      // K值平滑
-parameter D_SMOOTH = 3;      // D值平滑
-
-// 计算KDJ
-RSV = (CLOSE - LLV(LOW, KDJ_PERIOD)) / (HHV(HIGH, KDJ_PERIOD) - LLV(LOW, KDJ_PERIOD)) * 100;
-K = SMA(RSV, K_SMOOTH, 1);
-D = SMA(K, D_SMOOTH, 1);
-J = 3 * K - 2 * D;
-
-// 输出线条
-DRAWLINE(K, COLOR_BLUE, "K线");
-DRAWLINE(D, COLOR_YELLOW, "D线");
-DRAWLINE(J, COLOR_MAGENTA, "J线");
-
-// 参考线
-DRAWLINE(80, COLOR_RED, "超买线");
-DRAWLINE(20, COLOR_GREEN, "超卖线");
-DRAWLINE(50, COLOR_GRAY, "中轴线");`,
-  
-  boll: `// 布林带指标
-// 参数定义
-parameter BOLL_PERIOD = 20;  // 布林带周期
-parameter STD_DEV = 2;       // 标准差倍数
-
-// 计算布林带
-MID = MA(CLOSE, BOLL_PERIOD);
-STD = STDEV(CLOSE, BOLL_PERIOD);
-UPPER = MID + STD * STD_DEV;
-LOWER = MID - STD * STD_DEV;
-
-// 输出线条
-DRAWLINE(UPPER, COLOR_RED, "上轨");
-DRAWLINE(MID, COLOR_YELLOW, "中轨");
-DRAWLINE(LOWER, COLOR_GREEN, "下轨");
-
-// 填充区域
-DRAWBAND(UPPER, LOWER, COLOR_BLUE_ALPHA, "布林带通道");
-
-// 交易信号
-if (CROSS(CLOSE, UPPER)) {
-    DRAWICON(HIGH, ICON_DOWN, "突破上轨");
-}
-if (CROSS(LOWER, CLOSE)) {
-    DRAWICON(LOW, ICON_UP, "突破下轨");
-}`,
-  
-  custom: `// 自定义指标模板
-// 在这里编写您的指标代码
-
-// 参数定义示例
-// parameter PERIOD = 20;
-
-// 计算示例
-// VALUE = MA(CLOSE, PERIOD);
-
-// 输出示例
-// DRAWLINE(VALUE, COLOR_BLUE, "指标线");
-
-// 开始编写您的代码...`
-}
 
 // 组件挂载
 onMounted(async () => {
@@ -707,7 +413,7 @@ function getCurrentEditor() {
 }
 
 // 编译代码
-function compileCode() {
+async function compileCode() {
   const editor = getCurrentEditor()
   if (!editor) return
   
@@ -720,6 +426,29 @@ function compileCode() {
     
     if (result.success) {
       ElMessage.success('编译成功！')
+      
+      // 自动保存到indicators文件夹
+      const currentTab = editorTabs.value.find(tab => tab.id === activeEditorTab.value)
+      if (currentTab && currentTab.name !== '新建指标') {
+        const indicatorName = currentTab.name.replace('.mai', '')
+        const category = detectIndicatorCategory(result.indicatorsFormat)
+        
+        try {
+          const saveResult = await indicatorsManager.compileAndSave(
+            code,
+            indicatorName,
+            category
+          )
+          
+          if (saveResult.success) {
+            ElMessage.success(`指标已自动保存到indicators/${category}文件夹`)
+          } else {
+            console.warn('自动保存失败:', saveResult.message)
+          }
+        } catch (saveError) {
+          console.warn('自动保存过程中出错:', saveError.message)
+        }
+      }
     } else {
       ElMessage.error(`编译失败: ${result.error}`)
     }
@@ -732,6 +461,20 @@ function compileCode() {
   } finally {
     compiling.value = false
   }
+}
+
+// 检测指标类型（主图/副图）
+function detectIndicatorCategory(indicatorsFormat) {
+  if (!indicatorsFormat || !indicatorsFormat.figures) {
+    return 'sub' // 默认为副图
+  }
+  
+  // 检查是否有baseValue为null的图形（主图指标特征）
+  const hasMainChartFigure = indicatorsFormat.figures.some(figure => 
+    figure.baseValue === null
+  )
+  
+  return hasMainChartFigure ? 'main' : 'sub'
 }
 
 // 预览指标
@@ -917,16 +660,122 @@ function newIndicator() {
   }).catch(() => {})
 }
 
-// 加载模板
-function loadTemplate() {
-  if (!selectedTemplate.value) return
-  
-  const code = templateCodes[selectedTemplate.value]
+
+// 撤销编辑
+function undoEdit() {
   const editor = getCurrentEditor()
-  if (code && editor) {
-    editor.setValue(code)
-    compiledResult.value = null
+  if (editor) {
+    editor.trigger('keyboard', 'undo', null)
+    ElMessage.success('已撤销')
   }
+}
+
+// 清空编辑器
+async function clearEditor() {
+  const editor = getCurrentEditor()
+  if (!editor) {
+    ElMessage.warning('请先选择一个编辑器标签页')
+    return
+  }
+  
+  // 先获取当前标签页
+  const currentTab = editorTabs.value.find(tab => tab.id === activeEditorTab.value)
+  if (!currentTab) {
+    ElMessage.error('未找到当前标签页')
+    return
+  }
+  
+  try {
+    await ElMessageBox.confirm(
+      '确定要清空当前编辑器内容吗？',
+      '确认清空',
+      {
+        type: 'warning',
+        confirmButtonText: '确定',
+        cancelButtonText: '取消'
+      }
+    )
+    
+    // 用户确认后执行清空操作
+    try {
+      // 直接设置编辑器内容为空
+      const model = editor.getModel()
+      if (model) {
+        model.setValue('')
+      } else {
+        editor.setValue('')
+      }
+      
+      // 更新标签页状态
+      currentTab.code = ''
+      currentTab.saved = false
+      compiledResult.value = null
+      
+      ElMessage.success('编辑器已清空')
+    } catch (error) {
+      console.error('清空编辑器时出错:', error)
+      ElMessage.error('清空编辑器失败: ' + error.message)
+    }
+  } catch (error) {
+    // 用户取消操作或其他错误
+    if (error !== 'cancel') {
+      console.error('确认对话框出错:', error)
+      ElMessage.error('操作失败，请重试')
+    }
+  }
+}
+
+// 移除指标
+function removeIndicator() {
+  const editor = getCurrentEditor()
+  if (!editor) return
+  
+  const currentTab = editorTabs.value.find(tab => tab.id === activeEditorTab.value)
+  if (!currentTab) return
+  
+  ElMessageBox.confirm('确定要移除当前指标吗？', '确认移除', {
+    type: 'warning'
+  }).then(() => {
+    // 关闭当前标签页
+    closeTab(currentTab.id)
+    ElMessage.success('指标已移除')
+  }).catch(() => {})
+}
+
+// 收藏指标
+function favoriteIndicator() {
+  const editor = getCurrentEditor()
+  if (!editor) return
+  
+  const currentTab = editorTabs.value.find(tab => tab.id === activeEditorTab.value)
+  if (!currentTab) return
+  
+  // 获取收藏列表
+  const favorites = JSON.parse(localStorage.getItem('favoriteIndicators') || '[]')
+  
+  // 检查是否已收藏
+  const isAlreadyFavorite = favorites.some(fav => fav.name === currentTab.name)
+  
+  if (isAlreadyFavorite) {
+    ElMessage.warning('该指标已在收藏夹中')
+    return
+  }
+  
+  // 添加到收藏
+  const favorite = {
+    id: Date.now().toString(),
+    name: currentTab.name,
+    code: editor.getValue(),
+    createTime: new Date().toISOString()
+  }
+  
+  favorites.push(favorite)
+  localStorage.setItem('favoriteIndicators', JSON.stringify(favorites))
+  
+  // 发射事件通知父组件打开指标弹窗
+  emit('show-indicator-dialog')
+  
+  ElMessage.success('已添加到收藏夹，正在打开指标弹窗')
 }
 
 // 格式化代码
@@ -943,103 +792,9 @@ function toggleFullscreen() {
   ElMessage.info('全屏功能开发中...')
 }
 
-// 发送AI消息
-function sendMessage() {
-  if (!chatInput.value.trim()) return
-  
-  // 添加用户消息
-  chatMessages.value.push({
-    type: 'user',
-    content: chatInput.value,
-    timestamp: Date.now()
-  })
-  
-  const userMessage = chatInput.value
-  chatInput.value = ''
-  aiProcessing.value = true
-  
-  // 模拟AI响应
-  setTimeout(() => {
-    const response = generateAIResponse(userMessage)
-    chatMessages.value.push({
-      type: 'assistant',
-      content: response.message,
-      timestamp: Date.now()
-    })
-    
-    // 如果有生成的代码，应用到编辑器
-    if (response.code) {
-        const editor = getCurrentEditor()
-        if (editor) {
-          editor.setValue(response.code)
-        }
-      }
-    
-    aiProcessing.value = false
-    
-    // 滚动到底部
-    nextTick(() => {
-      if (chatMessagesContainer.value) {
-        chatMessagesContainer.value.scrollTop = chatMessagesContainer.value.scrollHeight
-      }
-    })
-  }, 1000)
-}
 
-// 生成AI响应（模拟）
-function generateAIResponse(message) {
-  const lowerMessage = message.toLowerCase()
-  
-  if (lowerMessage.includes('双均线') || lowerMessage.includes('ma')) {
-    return {
-      message: '我为你生成了一个双均线指标，包含5日和20日移动平均线。当短期均线上穿长期均线时可能是买入信号。',
-      code: templateCodes.dual_ma
-    }
-  }
-  
-  if (lowerMessage.includes('macd')) {
-    return {
-      message: '我为你生成了MACD指标，包含DIF线、DEA线和MACD柱。这是一个常用的趋势跟踪指标。',
-      code: templateCodes.macd
-    }
-  }
-  
-  if (lowerMessage.includes('rsi')) {
-    return {
-      message: '我为你生成了RSI指标，包含6日、12日和24日RSI。RSI值在70以上可能超买，30以下可能超卖。',
-      code: templateCodes.rsi
-    }
-  }
-  
-  if (lowerMessage.includes('kdj')) {
-    return {
-      message: '我为你生成了KDJ指标，这是一个随机震荡指标，K线和D线的交叉可以作为买卖信号。',
-      code: templateCodes.kdj
-    }
-  }
-  
-  if (lowerMessage.includes('布林带') || lowerMessage.includes('boll')) {
-    return {
-      message: '我为你生成了布林带指标，包含上轨、中轨和下轨。价格触及上下轨时可能出现反转。',
-      code: templateCodes.boll
-    }
-  }
-  
-  return {
-    message: '我理解你想要创建一个自定义指标。请提供更具体的需求，比如：\n1. 使用哪些技术指标函数\n2. 计算周期参数\n3. 输出几条线\n4. 指标的具体逻辑\n\n我可以帮你生成相应的麦语言代码。',
-    code: null
-  }
-}
 
-// 关闭AI对话框
-function handleAIDialogClose() {
-  showAIDialog.value = false
-}
 
-// 格式化时间
-function formatTime(timestamp) {
-  return new Date(timestamp).toLocaleTimeString()
-}
 
 // 文件树相关方法
 function refreshFileTree() {
@@ -1065,7 +820,7 @@ function openFileInEditor(fileData) {
   const newTab = {
     id: fileData.id,
     name: fileData.label,
-    code: templateCodes[fileData.id] || templateCodes.custom,
+    code: '// 请在此处编写您的指标代码\n',
     saved: true
   }
   
@@ -1449,22 +1204,57 @@ function toggleAIPanel() {
   flex: 1;
   display: flex;
   overflow: hidden;
+  height: calc(100vh - 48px); /* 减去工具栏高度 */
 }
 
-/* 左侧文件树面板 */
+/* 文件树面板 */
 .file-tree-panel {
-  width: 250px;
+  width: 250px; /* 固定宽度 */
   display: flex;
   flex-direction: column;
   background: var(--tv-bg-secondary);
-  border-right: 1px solid var(--tv-border-primary);
+  border-right: 1px solid var(--tv-border-color); /* 恢复右边框 */
   flex-shrink: 0;
+  height: 100%; /* 确保高度填满父容器 */
+}
+
+/* 右侧新容器 */
+.right-panel {
+  flex: 1; /* 占据剩余空间 */
+  display: flex;
+  flex-direction: column;
+  background: #131722; /* 直接使用颜色值 */
+  height: 100%; /* 确保高度填满父容器 */
+  min-height: 100%; /* 添加最小高度 */
+}
+
+.panel-header {
+  padding: 12px 16px;
+  background: #131722; /* 直接使用颜色值 */
+  border-bottom: 1px solid var(--tv-border-primary);
+}
+
+.panel-header h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--tv-text-primary);
+}
+
+.panel-content {
+  flex: 1;
+  padding: 16px;
+  overflow: auto;
+  color: var(--tv-text-secondary);
+  position: relative;
+  z-index: 9999;
 }
 
 .file-tree-content {
   flex: 1;
   overflow: auto;
   padding: 8px;
+  background-color: white;
 }
 
 .file-tree-node {
@@ -1477,46 +1267,7 @@ function toggleAIPanel() {
   font-size: 13px;
 }
 
-/* 右侧IDE面板 */
-.ide-right-panel {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  background: var(--tv-bg-secondary);
-  overflow: hidden;
-}
-
-/* 编辑器区域 */
-.editor-section {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.editor-tabs {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.editor-tabs .el-tabs {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
-
-.editor-tabs .el-tabs__content {
-  flex: 1;
-  overflow: hidden;
-}
-
-.editor-tabs .el-tab-pane {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-}
+/* 编辑器相关样式已完全移除 */
 
 .welcome-panel {
   flex: 1;
@@ -1565,52 +1316,10 @@ function toggleAIPanel() {
   min-height: 0;
   border: none;
   border-radius: 0;
-}
-
-.tab-editor-container {
-  flex: 1;
   overflow: hidden;
 }
 
-.compile-result {
-  height: 200px;
-  border-top: 1px solid var(--tv-border-primary);
-  background: var(--tv-bg-secondary);
-  flex-shrink: 0;
-}
 
-.result-header {
-  padding: 8px 16px;
-  background: var(--tv-bg-overlay);
-  border-bottom: 1px solid var(--tv-border-primary);
-}
-
-.result-status {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 500;
-}
-
-.result-status.success {
-  color: var(--tv-success);
-}
-
-.result-status.error {
-  color: var(--tv-danger);
-}
-
-.result-content {
-  height: calc(100% - 40px);
-  overflow: auto;
-  padding: 12px;
-  font-family: 'Courier New', monospace;
-  font-size: 12px;
-  line-height: 1.4;
-  white-space: pre-wrap;
-  background: var(--tv-bg-primary);
-  color: var(--tv-text-primary);
-}
 
 /* Element Plus 组件样式覆盖 */
 :deep(.el-tree) {
@@ -1744,90 +1453,9 @@ function toggleAIPanel() {
   color: var(--tv-text-secondary) !important;
 }
 
-/* AI面板样式 */
-.ai-input-panel {
-  height: 300px;
-  border-top: 1px solid var(--tv-border-primary);
-  background: var(--tv-bg-secondary);
-  display: flex;
-  flex-direction: column;
-  flex-shrink: 0;
-}
 
-.ai-input-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 12px;
-  background: var(--tv-bg-overlay);
-  border-bottom: 1px solid var(--tv-border-primary);
-  font-weight: 500;
-  font-size: 13px;
-  height: 36px;
-  color: var(--tv-text-primary);
-}
 
-.ai-chat-panel {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
 
-.chat-messages {
-  flex: 1;
-  overflow-y: auto;
-  padding: 12px;
-  background: var(--tv-bg-primary);
-}
-
-.chat-input {
-  padding: 12px;
-  border-top: 1px solid var(--tv-border-primary);
-  background: var(--tv-bg-secondary);
-}
-
-.input-actions {
-  margin-top: 8px;
-  text-align: right;
-}
-
-.message {
-  margin-bottom: 16px;
-  display: flex;
-  gap: 8px;
-}
-
-.message.user {
-  justify-content: flex-end;
-}
-
-.message-content {
-  max-width: 80%;
-  padding: 8px 12px;
-  border-radius: 8px;
-  font-size: 14px;
-  line-height: 1.5;
-  word-wrap: break-word;
-}
-
-.message.user .message-content {
-  background: var(--tv-primary);
-  color: var(--tv-text-inverse);
-}
-
-.message.assistant .message-content {
-  background: var(--tv-bg-overlay);
-  border: 1px solid var(--tv-border-primary);
-  color: var(--tv-text-primary);
-}
-
-.message-time {
-  font-size: 12px;
-  color: var(--tv-text-secondary);
-  margin-top: 4px;
-  text-align: center;
-}
 
 .code-output,
 .error-message {
@@ -1877,60 +1505,5 @@ function toggleAIPanel() {
   vertical-align: middle;
 }
 
-.ai-chat {
-  height: 500px;
-  display: flex;
-  flex-direction: column;
-}
 
-.chat-messages {
-  flex: 1;
-  overflow-y: auto;
-  padding: 16px;
-  background: var(--tv-bg-primary);
-}
-
-.message {
-  margin-bottom: 16px;
-}
-
-.message.user {
-  text-align: right;
-}
-
-.message.user .message-content {
-  background: var(--tv-primary);
-  color: var(--tv-text-inverse);
-  display: inline-block;
-  padding: 8px 12px;
-  border-radius: 12px;
-  max-width: 80%;
-  word-wrap: break-word;
-}
-
-.message.assistant .message-content {
-  background: var(--tv-bg-overlay);
-  border: 1px solid var(--tv-border-primary);
-  display: inline-block;
-  padding: 8px 12px;
-  border-radius: 12px;
-  max-width: 80%;
-  word-wrap: break-word;
-}
-
-.message-time {
-  font-size: 12px;
-  color: var(--tv-text-secondary);
-  margin-top: 4px;
-}
-
-.chat-input {
-  padding: 16px;
-  border-top: 1px solid var(--tv-border-primary);
-}
-
-.input-actions {
-  margin-top: 8px;
-  text-align: right;
-}
 </style>

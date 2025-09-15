@@ -59,7 +59,7 @@
     </el-header>
 
     <!-- 主体内容区 -->
-     <el-main :style="{ height: 'calc(100vh - 44px)', padding: '0' }">
+     <el-main :style="{ height: `calc(100vh - 44px)`, padding: '0', display: 'flex' }">
       <el-container direction="horizontal" :style="{ height: '100%' }">
         <!-- 左边栏 -->
         <el-aside 
@@ -80,7 +80,7 @@
         <!-- 中间区域 -->
         <el-main 
           :style="{ 
-            background: 'var(--tv-bg-primary)', 
+            background: isBottomOverlay ? 'var(--tv-bg-secondary)' : 'var(--tv-bg-primary)', 
             padding: '0',
             height: '100%',
             overflow: 'hidden'
@@ -182,7 +182,7 @@
                     overflow: 'hidden',
                     padding: '0'
                   }">
-                    <IndicatorIDE />
+                    <IndicatorIDE @show-indicator-dialog="handleShowIndicatorDialog" />
                   </div>
                 </el-tab-pane>
               </el-tabs>
@@ -533,6 +533,11 @@ const applyIndicatorSettings = () => {
   ElMessage.success('指标设置已应用')
 }
 
+// 处理显示指标弹窗事件
+function handleShowIndicatorDialog() {
+  indicatorDialogVisible.value = true
+}
+
 // 股票信息
 const currentSymbol = ref('BTCUSDT')
 const currentPrice = ref('43,250.50')
@@ -602,8 +607,8 @@ const bottomFooterStyle = computed(() => {
     height: bottomPanelHeight.value + 'px'
   } as any
   return isBottomOverlay.value
-    ? { ...base, position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 20, width: '100%' }
-    : { ...base, flexShrink: 0 }
+    ? { ...base, position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 1, width: '100%' }
+    : { ...base, flexShrink: 0, zIndex: 1 }
 })
 const startY = ref(0)
 const startHeight = ref(0)
@@ -758,7 +763,9 @@ html, body {
 .el-main {
   margin: 0;
   padding: 0;
-  height: 100vh;
+  /* Fix: avoid forcing all el-main to 100vh which adds extra space equal to header height */
+  height: auto;
+  min-height: 0;
   font-family: var(--tv-font-family);
   background-color: var(--tv-bg-primary);
   color: var(--tv-text-primary);

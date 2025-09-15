@@ -108,11 +108,15 @@ class MaiLangCompiler {
       // 生成KLineChart兼容的指标定义
       const klineIndicator = this.generateKLineIndicator(ast);
       
+      // 生成indicators文件夹兼容的格式
+      const indicatorsFormat = this.generateIndicatorsFormat(ast);
+      
       return {
         success: true,
         jsCode,
         vnpyIndicator,
         klineIndicator,
+        indicatorsFormat,
         ast
       };
     } catch (error) {
@@ -123,6 +127,90 @@ class MaiLangCompiler {
         column: error.column || 0
       };
     }
+  }
+
+  /**
+   * 生成indicators文件夹兼容的格式
+   */
+  generateIndicatorsFormat(ast) {
+    const outputs = ast.outputs;
+    const params = this.extractParameters(ast);
+    
+    // 判断是主图还是副图指标
+    const isMainChart = this.isMainChartIndicator(outputs);
+    
+    return {
+      name: 'customIndicator',
+      shortName: 'CUSTOM',
+      calcParams: params.map((value, index) => ({
+        name: `param${index + 1}`,
+        value: value,
+        type: 'number'
+      })),
+      figures: outputs.map((name, index) => ({
+        key: name.toLowerCase(),
+        title: name,
+        type: 'line',
+        baseValue: isMainChart ? null : 0,
+        styles: {
+          style: 'solid',
+          smooth: false,
+          size: 1,
+          color: this.getDefaultColor(name)
+        }
+      })),
+      calc: this.generateIndicatorsCalcFunction(ast),
+      regenerateFigures: null,
+      createTooltipDataSource: null,
+      draw: null
+    };
+  }
+
+  /**
+   * 判断是否为主图指标
+   */
+  isMainChartIndicator(outputs) {
+    const mainChartKeywords = ['MA', 'EMA', 'SMA', 'BOLL', 'UP', 'DOWN', 'MID'];
+    return outputs.some(output => 
+      mainChartKeywords.some(keyword => output.toUpperCase().includes(keyword))
+    );
+  }
+
+  /**
+   * 生成indicators计算函数
+   */
+  generateIndicatorsCalcFunction(ast) {
+    return `function(dataList, calcParams) {
+  const result = [];
+  
+  for (let i = 0; i < dataList.length; i++) {
+    const data = {
+      open: dataList[i].open,
+      high: dataList[i].high,
+      low: dataList[i].low,
+      close: dataList[i].close,
+      volume: dataList[i].volume
+    };
+    
+    const indicatorData = {};
+    
+    ${ast.statements.map(stmt => this.generateIndicatorsStatement(stmt)).join('\n    ')}
+    
+    result.push(indicatorData);
+  }
+  
+  return result;
+}`;
+  }
+
+  /**
+   * 生成indicators语句
+   */
+  generateIndicatorsStatement(node) {
+    if (node.type === 'Assignment') {
+      return `indicatorData.${node.left.name.toLowerCase()} = ${this.generateExpression(node.right)};`;
+    }
+    return '';
   }
 
   /**
