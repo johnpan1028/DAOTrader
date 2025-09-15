@@ -30,6 +30,7 @@
           v-model="timeframe" 
           size="small" 
           :style="{ background: 'var(--tv-bg-overlay)', borderRadius: '6px', padding: '2px' }"
+          @change="onTimeframeChange"
         >
           <el-radio-button value="1m">1m</el-radio-button>
           <el-radio-button value="5m">5m</el-radio-button>
@@ -89,7 +90,7 @@
           <el-container direction="vertical" :style="{ height: '100%', overflow: 'hidden', position: 'relative' }">
             <!-- 上方：K线图表区域 -->
             <el-main :style="klineAreaStyle">
-              <KLineChart ref="klineChartRef" :chart-type="chartType as any" :indicators="indicatorState" />
+              <KLineChart ref="klineChartRef" :chart-type="chartType as any" :indicators="indicatorState" :symbol="currentSymbol" :timeframe="timeframe" />
             </el-main>
             
             <!-- 拖拽手柄 -->
@@ -131,14 +132,83 @@
                   <div :style="{ 
                     height: 'calc(100% - 40px)', 
                     color: 'var(--tv-text-primary)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '14px',
                     overflow: 'hidden',
-                    padding: '8px'
+                    padding: '0'
                   }">
-                    行情列表内容区域
+                    <el-tabs 
+                       v-model="marketActiveTab" 
+                       type="card"
+                       :style="{
+                         height: '100%',
+                         '--el-tabs-header-height': '32px'
+                       }"
+                     >
+                       <el-tab-pane label="国内期货" name="domestic-futures">
+                         <div :style="{ 
+                           height: 'calc(100% - 32px)', 
+                           overflow: 'hidden'
+                         }">
+                           <MarketGrid :market-type="'domestic-futures'" @symbol-selected="onSymbolSelected" />
+                         </div>
+                       </el-tab-pane>
+                       <el-tab-pane label="国际期货" name="international-futures">
+                         <div :style="{ 
+                           height: 'calc(100% - 32px)', 
+                           overflow: 'hidden'
+                         }">
+                           <MarketGrid :market-type="'international-futures'" @symbol-selected="onSymbolSelected" />
+                         </div>
+                       </el-tab-pane>
+                       <el-tab-pane label="A股" name="a-shares">
+                         <div :style="{ 
+                           height: 'calc(100% - 32px)', 
+                           overflow: 'hidden'
+                         }">
+                           <MarketGrid :market-type="'a-shares'" @symbol-selected="onSymbolSelected" />
+                         </div>
+                       </el-tab-pane>
+                       <el-tab-pane label="H股" name="h-shares">
+                         <div :style="{ 
+                           height: 'calc(100% - 32px)', 
+                           overflow: 'hidden'
+                         }">
+                           <MarketGrid :market-type="'h-shares'" @symbol-selected="onSymbolSelected" />
+                         </div>
+                       </el-tab-pane>
+                       <el-tab-pane label="美股" name="us-stocks">
+                         <div :style="{ 
+                           height: 'calc(100% - 32px)', 
+                           overflow: 'hidden'
+                         }">
+                           <MarketGrid :market-type="'us-stocks'" @symbol-selected="onSymbolSelected" />
+                         </div>
+                       </el-tab-pane>
+                       <el-tab-pane label="外汇" name="forex">
+                         <div :style="{ 
+                           height: 'calc(100% - 32px)', 
+                           overflow: 'hidden'
+                         }">
+                           <MarketGrid :market-type="'forex'" @symbol-selected="onSymbolSelected" />
+                         </div>
+                       </el-tab-pane>
+                       <el-tab-pane label="数字币" name="crypto">
+                         <div :style="{ 
+                           height: 'calc(100% - 32px)', 
+                           overflow: 'hidden'
+                         }">
+                           <MarketGrid :market-type="'crypto'" @symbol-selected="onSymbolSelected" />
+                         </div>
+                       </el-tab-pane>
+                       <el-tab-pane label="模拟" name="simulation">
+                         <div :style="{ 
+                           height: 'calc(100% - 32px)', 
+                           overflow: 'hidden'
+                         }">
+                           <MarketGrid :market-type="'simulation'" @symbol-selected="onSymbolSelected" />
+                         </div>
+                       </el-tab-pane>
+
+                     </el-tabs>
                   </div>
                 </el-tab-pane>
                 
@@ -398,6 +468,7 @@ import {
 } from '@element-plus/icons-vue'
 import KLineChart from './components/KLineChart.vue'
 import IndicatorIDE from './components/IndicatorIDE.vue'
+import MarketGrid from './components/MarketGrid.vue'
 
 
 
@@ -410,6 +481,11 @@ const symbolSearch = ref('')
 const timeframe = ref('15m')
 const chartType = ref<'candle' | 'line'>('candle')
 
+// 新增：周期切换回调，传递至 KLineChart 并做轻提示
+const onTimeframeChange = (val: string) => {
+  console.log('Header timeframe changed:', val)
+  ElMessage.success(`已切换周期：${val}`)
+}
 
 // 指标状态与弹窗
 const indicatorDialogVisible = ref(false)
@@ -524,6 +600,13 @@ const selectSymbol = (symbol: string) => {
   ElMessage.success(`已切换到 ${symbol}`)
 }
 
+// 处理MarketGrid选中品种事件
+const onSymbolSelected = (symbol: string) => {
+  console.log('Symbol selected from MarketGrid:', symbol)
+  currentSymbol.value = symbol
+  ElMessage.success(`已选择品种: ${symbol}`)
+}
+
 // 应用指标设置
 const applyIndicatorSettings = () => {
   console.log('应用指标设置:', indicatorState.value)
@@ -574,7 +657,7 @@ const startX = ref(0)
 const startWidth = ref(0)
 
 // 底部面板高度控制
-const bottomPanelHeight = ref(100) // 设置底部面板高度为100px
+const bottomPanelHeight = ref(300) // 设置底部面板高度为300px，足够显示表格
 const isBottomResizing = ref(false)
 
 // 新增：视口高度与覆盖/锁定逻辑
@@ -630,6 +713,7 @@ const maxBottomHeight = ref(0) // 将在mounted中计算
 
 // 底部标签页控制
 const activeTab = ref('market-list') // 默认激活行情列表
+const marketActiveTab = ref('domestic-futures') // 行情列表内部标签页控制，默认激活期货
 
 // 底部面板拖拽调整方法
 const startBottomResize = (event: MouseEvent) => {

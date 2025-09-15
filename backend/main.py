@@ -82,24 +82,60 @@ from api.futures_api import futures_bp
 class ConnectionManager:
     def __init__(self):
         self.active_connections: List[WebSocket] = []
+        # 维护每个连接订阅的品种集合
+        self.connection_symbols: dict[WebSocket, set] = {}
 
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
         self.active_connections.append(websocket)
-        print("connection open")
+        print(f"WebSocket连接已建立，当前连接数: {len(self.active_connections)}")
 
     def disconnect(self, websocket: WebSocket):
         if websocket in self.active_connections:
             self.active_connections.remove(websocket)
-        print("connection closed")
+        if websocket in self.connection_symbols:
+            del self.connection_symbols[websocket]
+        print(f"WebSocket连接已断开，当前连接数: {len(self.active_connections)}")
+
+    def subscribe_symbol(self, websocket: WebSocket, symbol: str):
+        """为连接订阅品种"""
+        if websocket not in self.connection_symbols:
+            self.connection_symbols[websocket] = set()
+        self.connection_symbols[websocket].add(symbol)
+        print(f"连接订阅品种: {symbol}，当前订阅: {self.connection_symbols[websocket]}")
 
     async def broadcast(self, message: str):
+        """广播消息给所有连接的客户端"""
+        if not self.active_connections:
+            return
+        
         disconnected = []
         for connection in self.active_connections:
             try:
                 await connection.send_text(message)
-            except:
+            except Exception as e:
+                print(f"发送消息失败: {e}")
                 disconnected.append(connection)
+        
+        # 清理断开的连接
+        for connection in disconnected:
+            self.disconnect(connection)
+    
+    async def broadcast_to_symbol(self, symbol: str, message: str):
+        """向订阅特定品种的连接广播消息"""
+        if not self.active_connections:
+            return
+        
+        disconnected = []
+        for connection in self.active_connections:
+            # 只向订阅了该品种的连接发送消息
+            subscribed_symbols = self.connection_symbols.get(connection, set())
+            if symbol in subscribed_symbols:
+                try:
+                    await connection.send_text(message)
+                except Exception as e:
+                    print(f"发送消息失败: {e}")
+                    disconnected.append(connection)
         
         # 清理断开的连接
         for connection in disconnected:
@@ -143,7 +179,8 @@ class VnPyDataHandler:
                 "pre_close": tick.pre_close,
             }
         }
-        asyncio.run_coroutine_threadsafe(self.broadcast(json.dumps(message)), self.loop)
+        # 只向订阅了该品种的连接广播数据
+        asyncio.run_coroutine_threadsafe(manager.broadcast_to_symbol(tick.symbol, json.dumps(message)), self.loop)
     
     def on_bar(self, event):
         """处理K线数据事件"""
@@ -163,58 +200,108 @@ class VnPyDataHandler:
                 "close_price": bar.close_price,
             }
         }
-        asyncio.run_coroutine_threadsafe(self.broadcast(json.dumps(message)), self.loop)
+        # 只向订阅了该品种的连接广播数据
+        asyncio.run_coroutine_threadsafe(manager.broadcast_to_symbol(bar.symbol, json.dumps(message)), self.loop)
 
 # --- 4. 模拟数据生成与广播 ---
+# 存储各品种的模拟数据状态
+simulation_data = {}
+
+def get_symbol_base_price(symbol: str) -> float:
+    """根据品种获取基础价格"""
+    price_map = {
+        'BTCUSDT': 45000.0,
+        'ETHUSDT': 2500.0,
+        'BNBUSDT': 300.0,
+        'ADAUSDT': 0.5,
+        'SOLUSDT': 100.0,
+        'XRPUSDT': 0.6,
+        'DOTUSDT': 7.0,
+        'SIM001': 100.0,
+        'SIM002': 200.0,
+        'SIM003': 150.0
+    }
+    return price_map.get(symbol, 100.0)
+
+def get_symbol_name(symbol: str) -> str:
+    """根据品种获取名称"""
+    name_map = {
+        'BTCUSDT': '比特币',
+        'ETHUSDT': '以太坊',
+        'BNBUSDT': 'BNB',
+        'ADAUSDT': '艾达币',
+        'SOLUSDT': 'Solana',
+        'XRPUSDT': '瑞波币',
+        'DOTUSDT': 'Polkadot',
+        'SIM001': '模拟品种A',
+        'SIM002': '模拟品种B',
+        'SIM003': '模拟品种C'
+    }
+    return name_map.get(symbol, f'品种{symbol}')
+
 async def simulate_data_loading():
     await asyncio.sleep(3)
     print("开始模拟VN.PY数据事件...")
     
-    # 模拟产生一个K线事件
-    bar = BarData(
-        symbol="000001",
-        exchange=Exchange.SSE,
-        datetime=datetime.now().replace(second=0, microsecond=0),
-        interval=Interval.MINUTE,
-        open_price=100.0,
-        high_price=100.5,
-        low_price=99.5,
-        close_price=100.2,
-        volume=10000,
-        gateway_name="LOCAL"
-    )
-    
-    # 每隔2秒生成一根"1分钟K线"并广播
+    # 每隔1秒生成数据并广播
     while True:
-        # 以上一根的收盘价作为开盘价
-        open_price = bar.close_price
-        # 增加价格波动范围，使K线图更明显
-        delta = random.uniform(-3.0, 3.0)
-        close_price = max(1.0, open_price + delta)
+        # 获取所有有订阅的品种
+        subscribed_symbols = set()
+        for symbols in manager.connection_symbols.values():
+            subscribed_symbols.update(symbols)
         
-        # 根据开收盘确定高低点，并增加一定随机性
-        high_price = max(open_price, close_price) + random.uniform(0, 2.0)
-        low_price = min(open_price, close_price) - random.uniform(0, 2.0)
+        # 为每个订阅的品种生成数据
+        for symbol in subscribed_symbols:
+            # 初始化品种数据（如果不存在）
+            if symbol not in simulation_data:
+                base_price = get_symbol_base_price(symbol)
+                simulation_data[symbol] = {
+                    'last_price': base_price,
+                    'open_price': base_price,
+                    'high_price': base_price,
+                    'low_price': base_price,
+                    'pre_close': base_price * 0.995,
+                    'volume': 0
+                }
+            
+            # 获取当前数据
+            data = simulation_data[symbol]
+            
+            # 模拟价格波动（根据基础价格调整波动幅度）
+            base_price = get_symbol_base_price(symbol)
+            volatility = base_price * 0.005  # 0.5%的波动率
+            price_change = random.uniform(-volatility, volatility)
+            new_price = max(base_price * 0.5, data['last_price'] + price_change)
+            
+            # 更新数据
+            data['last_price'] = round(new_price, 2)
+            data['high_price'] = max(data['high_price'], new_price)
+            data['low_price'] = min(data['low_price'], new_price)
+            data['volume'] += random.randint(10, 100)
+            
+            # 创建tick数据
+            tick = TickData(
+                symbol=symbol,
+                exchange=Exchange.SSE,
+                datetime=datetime.now(),
+                name=get_symbol_name(symbol),
+                last_price=data['last_price'],
+                open_price=data['open_price'],
+                high_price=data['high_price'],
+                low_price=data['low_price'],
+                pre_close=data['pre_close'],
+                volume=data['volume'],
+                gateway_name="LOCAL"
+            )
+            
+            # 调试日志
+            print(f"TICK {tick.datetime.isoformat()} {tick.symbol} 价格:{tick.last_price} 成交量:{tick.volume}")
+            
+            # 发送tick事件
+            event = Event("EVENT_TICK", tick)
+            event_engine.put(event)
         
-        # 随机成交量
-        volume = random.randint(2000, 20000)
-        
-        # 推进时间轴（按分钟递增）
-        bar.datetime = bar.datetime + timedelta(minutes=1)
-        
-        # 更新bar字段
-        bar.open_price = round(open_price, 2)
-        bar.high_price = round(high_price, 2)
-        bar.low_price = round(low_price, 2)
-        bar.close_price = round(close_price, 2)
-        bar.volume = volume
-        
-        # 调试日志
-        print(f"BAR {bar.datetime.isoformat()} O:{bar.open_price} H:{bar.high_price} L:{bar.low_price} C:{bar.close_price} V:{bar.volume}")
-        
-        event = Event("EVENT_BAR", bar)
-        event_engine.put(event)
-        await asyncio.sleep(2)
+        await asyncio.sleep(1)
 
 # --- 5. 生命周期管理 ---
 @asynccontextmanager
@@ -836,8 +923,28 @@ async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
     try:
         while True:
-            # 保持连接打开，主要接收广播数据
-            await websocket.receive_text()
+            # 接收客户端消息
+            data = await websocket.receive_text()
+            try:
+                message = json.loads(data)
+                if message.get('type') == 'market_change':
+                    market_type = message.get('market_type')
+                    print(f"收到市场切换请求: {market_type}")
+                    # 这里可以根据市场类型调整数据生成逻辑
+                    # 目前先记录日志，后续可以扩展
+                elif message.get('type') == 'subscribe_symbol':
+                    symbol = message.get('symbol')
+                    if symbol:
+                        manager.subscribe_symbol(websocket, symbol)
+                        print(f"客户端订阅品种: {symbol}")
+                elif message.get('type') == 'subscribe':
+                    symbols = message.get('symbols', [])
+                    if symbols:
+                        for symbol in symbols:
+                            manager.subscribe_symbol(websocket, symbol)
+                        print(f"客户端批量订阅品种: {symbols}")
+            except json.JSONDecodeError:
+                print(f"收到无效JSON消息: {data}")
     except WebSocketDisconnect:
         manager.disconnect(websocket)
 

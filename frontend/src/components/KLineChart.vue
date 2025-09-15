@@ -14,15 +14,23 @@ const emit = defineEmits<{
   (e: 'open-indicator-settings', payload: { paneId: string; name: string }): void
 }>();
 
-// Props: 图表类型与指标开关
+// Props: 图表类型、指标开关和品种代码
 const props = defineProps({
   chartType: {
     type: String as PropType<'candle' | 'line'>,
     default: 'candle'
   },
+  timeframe: {
+    type: String as PropType<'1m' | '5m' | '15m' | '1H' | '2H' | '4H' | 'D' | 'W' | 'M' | 'Y'>,
+    default: '15m'
+  },
   indicators: {
     type: Object as PropType<{ ma: boolean; vol: boolean; macd: boolean; custom_ma: boolean; custom_rsi: boolean }>,
     default: () => ({ ma: false, vol: false, macd: false, custom_ma: false, custom_rsi: false })
+  },
+  symbol: {
+    type: String,
+    default: 'BTCUSDT'
   }
 });
 
@@ -34,10 +42,67 @@ const containerStyle = { width: '100%', height: '100%', backgroundColor: 'transp
 let chart: any = null;
 let ws: WebSocket | null = null;
 let hasInitialData = false;
+// 为仅有tick推送的场景做聚合：维护当前时间粒度bar
+let currentBar: { timestamp: number; open: number; high: number; low: number; close: number; volume: number } | null = null;
+let currentBarTs: number | null = null; // 表示当前聚合桶的开始时间戳(ms)
 // 维护每个面板+指标名的可见性，用于tooltip图标的显隐切换
 const indicatorVisibility = new Map<string, boolean>();
 // ResizeObserver 用于监听容器尺寸变化
 let resizeObserver: ResizeObserver | null = null;
+
+// 新增：时间粒度聚合工具
+function timeframeToMs(tf: string): number {
+  const map: Record<string, number> = {
+    '1m': 60 * 1000,
+    '5m': 5 * 60 * 1000,
+    '15m': 15 * 60 * 1000,
+    '1H': 60 * 60 * 1000,
+    '2H': 2 * 60 * 60 * 1000,
+    '4H': 4 * 60 * 60 * 1000,
+    'D': 24 * 60 * 60 * 1000,
+    'W': 7 * 24 * 60 * 60 * 1000,
+    'M': 30 * 24 * 60 * 60 * 1000, // 简化按30天处理
+    'Y': 365 * 24 * 60 * 60 * 1000 // 简化按365天处理
+  };
+  return map[tf] ?? 60 * 1000;
+}
+let aggMs = timeframeToMs(props.timeframe);
+function getBucketStart(tsMs: number): number {
+  return Math.floor(tsMs / aggMs) * aggMs;
+}
+function resetAggregation(clearChart = true) {
+  hasInitialData = false;
+  currentBar = null;
+  currentBarTs = null;
+  if (chart && clearChart) {
+    chart.applyNewData([]);
+  }
+}
+function processIncomingBar(tsMs: number, open: number, high: number, low: number, close: number, volume: number) {
+  const bucket = getBucketStart(tsMs);
+  if (!chart) return;
+  if (!hasInitialData || !currentBar || currentBarTs == null) {
+    currentBar = { timestamp: bucket, open, high, low, close, volume: volume ?? 0 };
+    chart.applyNewData([currentBar]);
+    hasInitialData = true;
+    currentBarTs = bucket;
+    return;
+  }
+  if (bucket === currentBarTs) {
+    currentBar.high = Math.max(currentBar.high, high);
+    currentBar.low = Math.min(currentBar.low, low);
+    currentBar.close = close;
+    currentBar.volume = (currentBar.volume ?? 0) + (volume ?? 0);
+    chart.updateData({ ...currentBar });
+  } else if (bucket > currentBarTs) {
+    const newBar = { timestamp: bucket, open, high, low, close, volume: volume ?? 0 };
+    chart.updateData(newBar);
+    currentBar = newBar;
+    currentBarTs = bucket;
+  } else {
+    // 旧数据，忽略
+  }
+}
 
 // 暴露方法：父组件可调用以应用指标参数
 function applyIndicatorCalcParams(payload: { paneId: string; name: string; calcParams: any[] }) {
@@ -152,6 +217,25 @@ const applyChartType = (type: 'candle' | 'line') => {
   });
 };
 
+// 新增：初始化指标（根据 props.indicators 同步一次）
+function initializeIndicators() {
+  if (!chart) return;
+  try {
+    const indi = props.indicators || {} as any;
+    Object.entries(indi).forEach(([key, enabled]) => {
+      const indicatorName = key.toUpperCase().replace('_', '_');
+      ensureIndicator(indicatorName as any, Boolean(enabled));
+    });
+  } catch (err) {
+    console.warn('initializeIndicators error:', err);
+  }
+}
+
+// 新增：订阅指标相关的交互（占位实现，避免未定义报错）
+function subscribeIndicatorToggle() {
+  // 目前不绑定额外事件，仅作为占位，后续可根据需要扩展
+}
+
 // 注释：defineExpose已在上方处理完成
 
 // 监听indicators属性变化，自动同步指标状态
@@ -164,10 +248,54 @@ watch(
     // 同步所有指标状态
     Object.entries(newIndicators).forEach(([key, enabled]) => {
       const indicatorName = key.toUpperCase().replace('_', '_'); // MA, VOL, MACD, CUSTOM_MA, CUSTOM_RSI
-      ensureIndicator(indicatorName, enabled);
+      ensureIndicator(indicatorName as any, enabled as boolean);
     });
   },
   { deep: true }
+);
+
+// 监听品种变化
+watch(
+  () => props.symbol,
+  (newSymbol, oldSymbol) => {
+    console.log('KLineChart - Symbol prop changed:', { old: oldSymbol, new: newSymbol });
+    console.log('WebSocket state:', ws ? ws.readyState : 'null');
+    
+    if (newSymbol !== oldSymbol && ws && ws.readyState === WebSocket.OPEN) {
+      console.log('Symbol changed from', oldSymbol, 'to', newSymbol);
+      
+      // 清空图表数据并重置聚合
+      if (chart) {
+        console.log('Clearing chart data for new symbol');
+        chart.applyNewData([]);
+        hasInitialData = false;
+      }
+      currentBar = null;
+      currentBarTs = null;
+      
+      // 订阅新品种的数据
+      console.log('Sending subscription for new symbol:', newSymbol);
+      ws.send(JSON.stringify({
+        type: 'subscribe_symbol',
+        symbol: newSymbol
+      }));
+    } else if (newSymbol !== oldSymbol) {
+      console.warn('Cannot subscribe to new symbol - WebSocket not ready:', {
+        wsExists: !!ws,
+        wsState: ws ? ws.readyState : 'null'
+      });
+    }
+  }
+);
+
+// 新增：监听时间粒度变化，重置聚合与数据
+watch(
+  () => props.timeframe,
+  (newTf, oldTf) => {
+    console.log('KLineChart - timeframe changed:', { old: oldTf, new: newTf });
+    aggMs = timeframeToMs(newTf as string);
+    resetAggregation(true);
+  }
 );
 
 onMounted(async () => {
@@ -179,35 +307,57 @@ onMounted(async () => {
   
   ws.onopen = () => {
     console.log('Connected to WebSocket server');
+    // 订阅当前品种的数据
+    console.log('Subscribing to symbol:', props.symbol);
+    ws?.send(JSON.stringify({
+      type: 'subscribe_symbol',
+      symbol: props.symbol
+    }));
   };
   
   ws.onmessage = (event) => {
     try {
       const message = JSON.parse(event.data);
+      console.log('WebSocket message received:', message);
       
       if (message.type === 'bar') {
         const barData = message.data;
         console.log('原始后端数据:', barData);
         
-        // 转换数据格式以匹配KLineChart要求
-        const klineData = {
-          timestamp: new Date(barData.datetime).getTime(),
-          open: barData.open_price || barData.open,
-          high: barData.high_price || barData.high,
-          low: barData.low_price || barData.low,
-          close: barData.close_price || barData.close,
-          volume: barData.volume
-        };
-        
-        console.log('转换后KLineData:', klineData);
-        
-        // 若无初始数据，先设置初始数据；否则增量更新
-        if (chart && !hasInitialData) {
-          chart.applyNewData([klineData]);
-          hasInitialData = true;
-        } else if (chart) {
-          chart.updateData(klineData);
+        // 只处理当前选中品种的数据
+        if (barData.symbol !== props.symbol) {
+          console.log('Ignoring data for different symbol:', barData.symbol, 'current:', props.symbol);
+          return;
         }
+        
+        // 转换数据格式以匹配KLineChart要求
+        const tsMs = new Date(barData.datetime).getTime();
+        const open = barData.open_price || barData.open;
+        const high = barData.high_price || barData.high;
+        const low = barData.low_price || barData.low;
+        const close = barData.close_price || barData.close;
+        const volume = Number(barData.volume ?? 0);
+        
+        // 统一走聚合逻辑
+        processIncomingBar(tsMs, open, high, low, close, volume);
+      } else if (message.type === 'tick') {
+        const tick = message.data;
+        // 只处理当前选中品种
+        if (tick.symbol !== props.symbol) {
+          return;
+        }
+        const ts = tick.datetime ? Math.floor(new Date(tick.datetime).getTime()) : Date.now();
+        const price = tick.last_price ?? tick.close_price ?? tick.price;
+        const vol = Number(tick.volume ?? tick.last_volume ?? 0);
+        if (price == null) {
+          return;
+        }
+        if (!chart) {
+          // 图表尚未初始化，先不处理（等待图表就绪后由后续数据驱动）
+          return;
+        }
+        // 将tick视为极短周期bar，参与当前时间粒度聚合
+        processIncomingBar(ts, price, price, price, price, vol);
       }
     } catch (error) {
       console.error('Error processing message:', error);
@@ -236,334 +386,49 @@ onMounted(async () => {
     // 导入klinecharts模块用于注册指标
     const klinecharts = await import('klinecharts');
     registerCustomIndicators(klinecharts);
-    console.log('自定义指标注册完成');
-    
-    // 注册完成后，应用当前的指标状态
-    Object.entries(props.indicators).forEach(([key, enabled]) => {
-      if (enabled) {
-        const indicatorName = key.toUpperCase().replace('_', '_');
-        ensureIndicator(indicatorName, enabled);
-      }
-    });
-  } catch (error) {
-    console.error('自定义指标注册失败:', error);
+  } catch (err) {
+    console.warn('注册自定义指标失败：', err);
   }
-  // 获取CSS变量值（保留，作为后备），但下方将用 LWC 配色统一覆盖
-  const rootStyles = getComputedStyle(document.documentElement);
-  const borderColor = rootStyles.getPropertyValue('--el-border-color').trim() || '#2a2e39';
-  const textSecondary = rootStyles.getPropertyValue('--el-text-color-secondary').trim() || '#5d606b';
-  const textRegular = rootStyles.getPropertyValue('--el-text-color-regular').trim() || '#868993';
-  const textPrimary = rootStyles.getPropertyValue('--el-text-color-primary').trim() || '#d1d4dc';
-  const bgOverlay = rootStyles.getPropertyValue('--el-bg-color-overlay').trim() || '#1e222d';
-  const borderLight = rootStyles.getPropertyValue('--el-border-color-light').trim() || '#434651';
-  // derive a lighter frame color from the regular text color to soften frame lines
-  const frameColor = (() => {
-    const c = (textRegular || '#868993').trim();
-    const hex = /^#([0-9a-fA-F]{6})$/;
-    if (hex.test(c)) {
-      const r = parseInt(c.slice(1, 3), 16);
-      const g = parseInt(c.slice(3, 5), 16);
-      const b = parseInt(c.slice(5, 7), 16);
-      const lighten = (v: number, p = 0.28) => Math.min(255, Math.round(v + (255 - v) * p));
-      const rr = lighten(r);
-      const gg = lighten(g);
-      const bb = lighten(b);
-      const toHex = (v: number) => v.toString(16).padStart(2, '0');
-      return `#${toHex(rr)}${toHex(gg)}${toHex(bb)}`;
-    }
-    return c; // fallback if not hex
-  })();
-
-  // KLineCharts 原版默认配色（与副图保持一致）
-  const KLINE_BG = (rootStyles.getPropertyValue('--tv-bg-primary').trim() || '#131722');
-  const KLINE_GRID = '#292929';
-  const KLINE_TEXT = '#ffffff';  // 坐标数字、时间、指标名称使用白色
-  const KLINE_TEXT_SECONDARY = '#cccccc';  // 次要文本使用浅灰色
-  const KLINE_UP = '#2DC08E';     // klinecharts 原版绿色
-  const KLINE_DOWN = '#F92855';   // klinecharts 原版红色
-  const KLINE_NEUTRAL = '#888888'; // klinecharts 原版灰色
-  const KLINE_AREA_LINE = '#1677FF';
-  const KLINE_AREA_TOP = 'rgba(22, 119, 255, 0.2)';
-  const KLINE_AREA_BOTTOM = 'rgba(22, 119, 255, 0.01)';
-
-  chart.setStyles({
-    grid: {
-      horizontal: { color: KLINE_GRID },
-      vertical: { color: KLINE_GRID }
-    },
-    xAxis: {
-      axisLine: { color: '#333333' },
-      tickLine: { color: '#333333' },
-      tickText: { color: KLINE_TEXT }
-    },
-    yAxis: {
-      axisLine: { color: '#333333' },
-      tickLine: { color: '#333333' },
-      tickText: { color: KLINE_TEXT }
-    },
-    crosshair: {
-      horizontal: {
-        line: { color: '#888888' },
-        text: { backgroundColor: '#1e222d', borderColor: '#434651', color: '#d1d4dc' }
-      },
-      vertical: {
-        line: { color: '#888888' },
-        text: { backgroundColor: '#1e222d', borderColor: '#434651', color: '#d1d4dc' }
-      }
-    },
-    candle: {
-      // 蜡烛颜色（klinecharts 原版配色：绿涨红跌）
-      bar: {
-        upColor: KLINE_UP,
-        downColor: KLINE_DOWN,
-        noChangeColor: KLINE_NEUTRAL,
-        upBorderColor: KLINE_UP,
-        downBorderColor: KLINE_DOWN,
-        noChangeBorderColor: KLINE_NEUTRAL,
-        upWickColor: KLINE_UP,
-        downWickColor: KLINE_DOWN,
-        noChangeWickColor: KLINE_NEUTRAL,
-      },
-      // 折线/面积样式（当类型切为 area 时生效）
-      area: {
-        lineSize: 2,
-        lineColor: KLINE_AREA_LINE,
-        value: 'close',
-        smooth: false,
-        backgroundColor: [
-          { offset: 0, color: KLINE_AREA_TOP },
-          { offset: 1, color: KLINE_AREA_BOTTOM }
-        ],
-        point: {
-          show: true,
-          color: KLINE_AREA_LINE,
-          radius: 4,
-          rippleColor: 'rgba(22, 119, 255, 0.3)',
-          rippleRadius: 8,
-          animation: true,
-          animationDuration: 1000
-        }
-      },
-      priceMark: {
-        last: {
-          line: { show: true, style: 'dashed', dashedValue: [4, 4], size: 1 },
-          text: { show: true, style: 'fill', color: KLINE_TEXT }
-        }
-      },
-      tooltip: {
-        showRule: 'always',
-        showType: 'standard',
-        rect: { position: 'fixed', borderColor: 'rgba(10, 10, 10, .6)', color: 'rgba(10, 10, 10, .6)' },
-        title: { color: KLINE_TEXT },
-        legend: { color: KLINE_TEXT },
-        icons: [
-          {
-            id: 'candle_settings',
-            position: 'right',
-            color: KLINE_TEXT_SECONDARY,
-            activeColor: KLINE_TEXT,
-            size: 14,
-            fontFamily: 'Helvetica Neue',
-            icon: '⚙',
-            backgroundColor: 'transparent',
-            activeBackgroundColor: 'transparent',
-            marginLeft: 4,
-            marginTop: 2,
-            marginRight: 4,
-            marginBottom: 2,
-            paddingLeft: 2,
-            paddingTop: 2,
-            paddingRight: 2,
-            paddingBottom: 2
-          }
-        ]
-      }
-    },
-    tooltip: {
-      showRule: 'always',
-      showType: 'standard',
-      rect: { position: 'fixed', borderColor: 'rgba(10, 10, 10, .6)', color: 'rgba(10, 10, 10, .6)' },
-      title: { color: KLINE_TEXT },
-      legend: { color: KLINE_TEXT }
-    },
-    indicator: {
-      tooltip: {
-        showRule: 'always',
-        showType: 'standard',
-        defaultValue: 'n/a',
-        showName: true,
-        showParams: true,
-        text: { color: KLINE_TEXT, size: 12, family: 'Helvetica Neue', weight: 'normal', marginLeft: 8, marginTop: 4, marginRight: 8, marginBottom: 4 },
-        icons: [
-          {
-            id: 'toggle_visibility',
-            position: 'middle',
-            color: KLINE_TEXT_SECONDARY,
-            activeColor: KLINE_TEXT,
-            size: 14,
-            fontFamily: 'Helvetica Neue',
-            icon: '👁',
-            backgroundColor: 'transparent',
-            activeBackgroundColor: 'transparent',
-            marginLeft: 8,
-            marginTop: 2,
-            marginRight: 4,
-            marginBottom: 2,
-            paddingLeft: 2,
-            paddingTop: 2,
-            paddingRight: 2,
-            paddingBottom: 2
-          },
-          {
-            id: 'settings',
-            position: 'middle',
-            color: KLINE_TEXT_SECONDARY,
-            activeColor: KLINE_TEXT,
-            size: 14,
-            fontFamily: 'Helvetica Neue',
-            icon: '⚙',
-            backgroundColor: 'transparent',
-            activeBackgroundColor: 'transparent',
-            marginLeft: 4,
-            marginTop: 2,
-            marginRight: 4,
-            marginBottom: 2,
-            paddingLeft: 2,
-            paddingTop: 2,
-            paddingRight: 2,
-            paddingBottom: 2
-          },
-          {
-            id: 'remove_indicator',
-            position: 'middle',
-            color: '#F56C6C',
-            activeColor: '#F56C6C',
-            size: 14,
-            fontFamily: 'Helvetica Neue',
-            icon: '✖',
-            backgroundColor: 'transparent',
-            activeBackgroundColor: 'transparent',
-            marginLeft: 4,
-            marginTop: 2,
-            marginRight: 8,
-            marginBottom: 2,
-            paddingLeft: 2,
-            paddingTop: 2,
-            paddingRight: 2,
-            paddingBottom: 2
-          }
-        ]
-      }
-    },
-    separator: { color: '#333333' }
-  });
 
   // 应用初始图表类型
-  applyChartType(props.chartType);
+  if (props.chartType) {
+    applyChartType(props.chartType);
+  }
 
-  // 初始化 ResizeObserver 监听容器尺寸变化
+  // 监听容器尺寸变化，自适应图表
   if (chartContainer.value) {
-    resizeObserver = new ResizeObserver((entries) => {
-      if (chart && entries.length > 0) {
-        // 使用 requestAnimationFrame 确保在下一帧执行 resize
-        requestAnimationFrame(() => {
-          chart.resize();
-        });
+    resizeObserver = new ResizeObserver(() => {
+      if (chart && chartContainer.value) {
+        // 兼容不同版本的 klinecharts：优先使用 resize，回退到 setSize
+        if (typeof (chart as any).resize === 'function') {
+          try { (chart as any).resize(); } catch {}
+        } else if (typeof (chart as any).setSize === 'function') {
+          try { (chart as any).setSize(chartContainer.value!.clientWidth, chartContainer.value!.clientHeight); } catch {}
+        }
       }
     });
     resizeObserver.observe(chartContainer.value);
   }
 
-  // 图表初始化完成后，根据初始 props 创建指标
-  console.log('Applying initial indicators:', props.indicators);
-  if (props.indicators) {
-    ensureIndicator('MA', !!props.indicators.ma);
-    ensureIndicator('VOL', !!props.indicators.vol);
-    ensureIndicator('MACD', !!props.indicators.macd);
-  }
+  // 初始化指标（基于当前props.indicators）
+  initializeIndicators();
 
-  // 订阅 tooltip 图标点击事件
-  chart.subscribeAction('onTooltipIconClick', (payload: any) => {
-    try {
-      const { paneId, indicatorName, iconId } = payload || {};
-      if (!iconId) return;
-      // 指标图标
-      if (indicatorName && typeof indicatorName === 'string' && indicatorName.length > 0) {
-        switch (iconId) {
-          case 'toggle_visibility': {
-            // 使用正确的API查询当前指标的可见性状态
-            const targetIndicator = chart.getIndicatorByPaneId(paneId, indicatorName);
-            const currentVisible = targetIndicator?.visible ?? true;
-            const next = !currentVisible;
-            console.log(`Toggle visibility for ${indicatorName} in pane ${paneId}: ${next}`);
-            // 使用 paneId 作用域覆盖指定指标可见性
-            chart.overrideIndicator({ name: indicatorName, visible: next }, paneId);
-            break;
-          }
-          case 'remove_indicator': {
-            // 检查指标是否已存在
-        const existingIndicator = chart.getIndicatorByPaneId(paneId, indicatorName);
-        const indicatorExists = !!existingIndicator;
-            if (indicatorExists) {
-              chart.removeIndicator({ name: indicatorName, paneId });
-            }
-            break;
-          }
-          case 'settings': {
-            // 向上抛出事件，由父组件弹出参数对话框并通过 overrideIndicator 应用
-            emit('open-indicator-settings', { paneId, name: indicatorName });
-            break;
-          }
-          default:
-            break;
-        }
-      } else {
-        // 蜡烛图 tooltip 图标（indicatorName 为空字符串），此处仅示例打印
-        if (iconId === 'candle_settings') {
-          console.log('Candle tooltip settings clicked');
-        }
-      }
-    } catch (e) {
-      console.warn('onTooltipIconClick handler error:', e);
-    }
-  });
-  
-
+  // 订阅tooltip图标点击事件
+  subscribeIndicatorToggle();
 });
-
-// 监听外部传入的图表类型与指标变化
-watch(
-  () => props.chartType,
-  (val) => { applyChartType(val as 'candle' | 'line'); },
-  { immediate: false }
-);
-
-watch(
-  () => props.indicators,
-  (val) => {
-    console.log('Indicators props changed:', val);
-    if (!val || !chart) return;
-    ensureIndicator('MA', !!val.ma);
-    ensureIndicator('VOL', !!val.vol);
-    ensureIndicator('MACD', !!val.macd);
-  },
-  { deep: true, immediate: false }
-);
 
 onUnmounted(() => {
-  // 清理 ResizeObserver
-  if (resizeObserver) {
-    resizeObserver.disconnect();
-    resizeObserver = null;
+  if (resizeObserver && chartContainer.value) {
+    resizeObserver.unobserve(chartContainer.value);
   }
-  
   if (chart) {
-    if (chartContainer.value) {
-      dispose(chartContainer.value);
-    }
+    dispose(chart);
+    chart = null;
   }
   if (ws) {
-    ws.close();
+    try { ws.close(); } catch {}
+    ws = null;
   }
 });
+
 </script>
