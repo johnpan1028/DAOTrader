@@ -87,13 +87,58 @@
         </div>
       </div>
       
-      <!-- 右侧新容器 -->
-      <div class="right-panel">
+      <!-- 中间面板 -->
+      <div class="middle-panel">
         <div class="panel-header">
-          <h3>功能面板</h3>
+          <h3>编辑器面板</h3>
         </div>
         <div class="panel-content">
-          <p>这里可以添加其他功能模块</p>
+          <!-- 编辑器标签页 -->
+          <div v-if="editorTabs.length > 0" class="editor-tabs">
+            <div class="tab-bar">
+              <div 
+                v-for="tab in editorTabs" 
+                :key="tab.id"
+                :class="['tab-item', { active: activeEditorTab === tab.id, unsaved: !tab.saved }]"
+                @click="activeEditorTab = tab.id"
+              >
+                <span class="tab-name">{{ tab.name }}</span>
+                <el-icon class="tab-close" @click.stop="closeTab(tab.id)">
+                  <Close />
+                </el-icon>
+              </div>
+            </div>
+            
+            <!-- 编辑器容器 -->
+            <div class="editor-container">
+              <div 
+                v-for="tab in editorTabs" 
+                :key="tab.id"
+                :data-tab-id="tab.id"
+                :style="{ display: activeEditorTab === tab.id ? 'block' : 'none' }"
+                class="editor-instance"
+              ></div>
+            </div>
+          </div>
+          
+          <!-- 欢迎面板 -->
+          <div v-else class="welcome-panel">
+            <div class="welcome-content">
+              <h3>欢迎使用指标编程IDE</h3>
+              <p>请从左侧文件树选择一个文件开始编辑，或创建新的指标文件。</p>
+              <el-button type="primary" @click="createNewFile">创建新文件</el-button>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 右侧面板 -->
+      <div class="right-panel">
+        <div class="panel-header">
+          <h3>属性面板</h3>
+        </div>
+        <div class="panel-content">
+          <p>这里可以添加属性配置功能</p>
         </div>
       </div>
     </div>
@@ -1218,20 +1263,39 @@ function toggleAIPanel() {
   height: 100%; /* 确保高度填满父容器 */
 }
 
-/* 右侧新容器 */
-.right-panel {
-  flex: 1; /* 占据剩余空间 */
+/* 中间面板 */
+.middle-panel {
+  flex: 2; /* 占据更多空间作为主编辑区 */
   display: flex;
   flex-direction: column;
-  background: #131722; /* 直接使用颜色值 */
-  height: 100%; /* 确保高度填满父容器 */
-  min-height: 100%; /* 添加最小高度 */
+  background: var(--tv-bg-primary);
+  border-right: 1px solid var(--tv-border-color);
+  height: 100%;
+  min-height: 100%;
+}
+
+/* 右侧面板 */
+.right-panel {
+  flex: 1; /* 占据较少空间作为属性面板 */
+  display: flex;
+  flex-direction: column;
+  background: var(--tv-bg-secondary);
+  height: 100%;
+  min-height: 100%;
 }
 
 .panel-header {
-  padding: 12px 16px;
-  background: #131722; /* 直接使用颜色值 */
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--tv-bg-overlay);
   border-bottom: 1px solid var(--tv-border-primary);
+  font-weight: 500;
+  font-size: 13px;
+  height: 36px;
+  flex-shrink: 0;
+  color: var(--tv-text-primary);
 }
 
 .panel-header h3 {
@@ -1247,14 +1311,14 @@ function toggleAIPanel() {
   overflow: auto;
   color: var(--tv-text-secondary);
   position: relative;
-  z-index: 9999;
+  z-index: 10;
 }
 
 .file-tree-content {
   flex: 1;
   overflow: auto;
   padding: 8px;
-  background-color: white;
+  background-color: var(--tv-bg-secondary);
 }
 
 .file-tree-node {
@@ -1292,23 +1356,71 @@ function toggleAIPanel() {
   font-size: 14px;
 }
 
-.panel-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 12px;
-  background: var(--tv-bg-overlay);
-  border-bottom: 1px solid var(--tv-border-primary);
-  font-weight: 500;
-  font-size: 13px;
-  height: 36px;
-  flex-shrink: 0;
-  color: var(--tv-text-primary);
-}
-
 .header-actions {
   display: flex;
   gap: 8px;
+}
+
+.editor-tabs {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.tab-bar {
+  display: flex;
+  background: var(--tv-bg-secondary);
+  border-bottom: 1px solid var(--tv-border-primary);
+  overflow-x: auto;
+  flex-shrink: 0;
+}
+
+.tab-item {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--tv-bg-overlay);
+  border-right: 1px solid var(--tv-border-primary);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  min-width: 120px;
+  max-width: 200px;
+}
+
+.tab-item:hover {
+  background: var(--tv-bg-hover);
+}
+
+.tab-item.active {
+  background: var(--tv-bg-primary);
+  border-bottom: 2px solid var(--tv-accent-primary);
+}
+
+.tab-item.unsaved .tab-name::after {
+  content: ' •';
+  color: var(--tv-accent-primary);
+}
+
+.tab-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 13px;
+  color: var(--tv-text-primary);
+}
+
+.tab-close {
+  margin-left: 8px;
+  font-size: 12px;
+  color: var(--tv-text-secondary);
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.tab-close:hover {
+  opacity: 1;
+  color: var(--tv-text-primary);
 }
 
 .editor-container {
@@ -1317,6 +1429,15 @@ function toggleAIPanel() {
   border: none;
   border-radius: 0;
   overflow: hidden;
+  position: relative;
+}
+
+.editor-instance {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
 }
 
 

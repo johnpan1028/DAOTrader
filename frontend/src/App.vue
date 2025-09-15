@@ -98,7 +98,6 @@
               class="resize-handle"
               :style="dividerStyle"
               @mousedown="startBottomResize"
-
             >
               <!-- 拖拽指示器 -->
               <div :style="{
@@ -128,6 +127,21 @@
                   class="bottom-tabs"
                 >
 
+                <el-tab-pane label="行情列表" name="market-list">
+                  <div :style="{ 
+                    height: 'calc(100% - 40px)', 
+                    color: 'var(--tv-text-primary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '14px',
+                    overflow: 'hidden',
+                    padding: '8px'
+                  }">
+                    行情列表内容区域
+                  </div>
+                </el-tab-pane>
+                
                 <el-tab-pane label="策略测试" name="strategy">
                   <div :style="{ 
                     height: 'calc(100% - 40px)', 
@@ -560,7 +574,7 @@ const startX = ref(0)
 const startWidth = ref(0)
 
 // 底部面板高度控制
-const bottomPanelHeight = ref(40) // 默认为最小化状态
+const bottomPanelHeight = ref(100) // 设置底部面板高度为100px
 const isBottomResizing = ref(false)
 
 // 新增：视口高度与覆盖/锁定逻辑
@@ -601,22 +615,21 @@ const bottomFooterStyle = computed(() => {
   const base = {
     background: 'var(--tv-bg-secondary)',
     padding: '0',
-    minHeight: '25px',
     overflow: 'hidden',
     borderTop: '1px solid var(--tv-border-primary)',
     height: bottomPanelHeight.value + 'px'
   } as any
   return isBottomOverlay.value
     ? { ...base, position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 1, width: '100%' }
-    : { ...base, flexShrink: 0, zIndex: 1 }
+    : { ...base, position: 'relative', flexShrink: 0, zIndex: 1 }
 })
 const startY = ref(0)
 const startHeight = ref(0)
-const minBottomHeight = 40 // 调整最小高度为40px
+const minBottomHeight = 0 // 移除最小高度限制，允许完全自由调整
 const maxBottomHeight = ref(0) // 将在mounted中计算
 
 // 底部标签页控制
-const activeTab = ref('trading') // 默认激活交易面板
+const activeTab = ref('market-list') // 默认激活行情列表
 
 // 底部面板拖拽调整方法
 const startBottomResize = (event: MouseEvent) => {
@@ -776,9 +789,9 @@ html, body {
   height: 100vh;
   width: 100vw;
   overflow: hidden;
-  position: fixed;
-  top: 0;
-  left: 0;
+  /* position: fixed; */
+  /* top: 0; */
+  /* left: 0; */
 }
 /* 金融商品搜索弹窗样式 - 使用更强的选择器 */
 .symbol-search-dialog :deep(.el-overlay) {
@@ -1057,9 +1070,9 @@ html, body {
   overflow: hidden;
   margin: 0;
   padding: 0;
-  position: fixed;
-  top: 0;
-  left: 0;
+  /* position: fixed; */
+  /* top: 0; */
+  /* left: 0; */
 }
 
 /* 拖拽时的全局样式 */
@@ -1078,10 +1091,10 @@ body.resizing * {
   background: var(--tv-bg-secondary);
   border-right: 1px solid var(--tv-border-primary);
   overflow: hidden;
-  position: fixed;
-  left: 0;
-  top: 60px;
-  bottom: 0;
+  /* position: fixed; */
+  /* left: 0; */
+  /* top: 60px; */
+  /* bottom: 0; */
   width: 48px;
   z-index: 100;
   margin: 0;
@@ -1281,7 +1294,6 @@ body.resizing * {
   }
   
   .bottom-panel {
-    min-height: 200px;
   }
   
   .tab-content {
@@ -1337,9 +1349,10 @@ body.resizing * {
 :deep(.bottom-tabs .el-tabs__header) {
   margin: 0;
   background: var(--tv-bg-secondary);
-  border-bottom: 1px solid var(--tv-border-primary);
+  border-bottom: none;
   height: 40px;
   position: relative;
+  z-index: 200; /* Ensure header always above any overlay/handles */
 }
 
 :deep(.bottom-tabs .el-tabs__nav-wrap) {

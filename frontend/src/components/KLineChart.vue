@@ -30,7 +30,7 @@ const chartContainer = ref<HTMLElement | null>(null);
 // 跟踪当前面板ID（用于指标操作）
 const tempPaneId = ref<string>('default');
 // KLineCharts 原版配色：容器背景
-const containerStyle = { width: '100%', height: '100%', backgroundColor: 'var(--tv-bg-primary)' } as const;
+const containerStyle = { width: '100%', height: '100%', backgroundColor: 'transparent' } as const;
 let chart: any = null;
 let ws: WebSocket | null = null;
 let hasInitialData = false;
@@ -171,7 +171,62 @@ watch(
 );
 
 onMounted(async () => {
-  if (!chartContainer.value) return;
+  // 先初始化WebSocket连接（不依赖图表容器）
+  console.log('开始初始化WebSocket连接...');
+  
+  // 连接WebSocket
+  ws = new WebSocket('ws://localhost:8000/ws');
+  
+  ws.onopen = () => {
+    console.log('Connected to WebSocket server');
+  };
+  
+  ws.onmessage = (event) => {
+    try {
+      const message = JSON.parse(event.data);
+      
+      if (message.type === 'bar') {
+        const barData = message.data;
+        console.log('原始后端数据:', barData);
+        
+        // 转换数据格式以匹配KLineChart要求
+        const klineData = {
+          timestamp: new Date(barData.datetime).getTime(),
+          open: barData.open_price || barData.open,
+          high: barData.high_price || barData.high,
+          low: barData.low_price || barData.low,
+          close: barData.close_price || barData.close,
+          volume: barData.volume
+        };
+        
+        console.log('转换后KLineData:', klineData);
+        
+        // 若无初始数据，先设置初始数据；否则增量更新
+        if (chart && !hasInitialData) {
+          chart.applyNewData([klineData]);
+          hasInitialData = true;
+        } else if (chart) {
+          chart.updateData(klineData);
+        }
+      }
+    } catch (error) {
+      console.error('Error processing message:', error);
+    }
+  };
+  
+  ws.onerror = (error) => {
+    console.error('WebSocket error:', error);
+  };
+  
+  ws.onclose = () => {
+    console.log('WebSocket connection closed');
+  };
+  
+  // 然后初始化图表（如果容器存在）
+  if (!chartContainer.value) {
+    console.warn('图表容器未找到，稍后重试...');
+    return;
+  }
   
   // 初始化图表
   chart = init(chartContainer.value);
@@ -248,12 +303,12 @@ onMounted(async () => {
     },
     crosshair: {
       horizontal: {
-        line: { color: KLINE_TEXT },
-        text: { backgroundColor: 'var(--tv-bg-overlay)', borderColor: 'var(--tv-bg-overlay)', color: KLINE_TEXT }
+        line: { color: '#888888' },
+        text: { backgroundColor: '#1e222d', borderColor: '#434651', color: '#d1d4dc' }
       },
       vertical: {
-        line: { color: KLINE_TEXT },
-        text: { backgroundColor: 'var(--tv-bg-overlay)', borderColor: 'var(--tv-bg-overlay)', color: KLINE_TEXT }
+        line: { color: '#888888' },
+        text: { backgroundColor: '#1e222d', borderColor: '#434651', color: '#d1d4dc' }
       }
     },
     candle: {
@@ -473,53 +528,7 @@ onMounted(async () => {
     }
   });
   
-  // 连接WebSocket
-  ws = new WebSocket('ws://localhost:8000/ws');
-  
-  ws.onopen = () => {
-    console.log('Connected to WebSocket server');
-  };
-  
-  ws.onmessage = (event) => {
-    try {
-      const message = JSON.parse(event.data);
-      
-      if (message.type === 'bar') {
-        const barData = message.data;
-        console.log('原始后端数据:', barData);
-        
-        // 转换数据格式以匹配KLineChart要求
-        const klineData = {
-          timestamp: new Date(barData.datetime).getTime(),
-          open: barData.open_price || barData.open,
-          high: barData.high_price || barData.high,
-          low: barData.low_price || barData.low,
-          close: barData.close_price || barData.close,
-          volume: barData.volume
-        };
-        
-        console.log('转换后KLineData:', klineData);
-        
-        // 若无初始数据，先设置初始数据；否则增量更新
-        if (!hasInitialData) {
-          chart.applyNewData([klineData]);
-          hasInitialData = true;
-        } else {
-          chart.updateData(klineData);
-        }
-      }
-    } catch (error) {
-      console.error('Error processing message:', error);
-    }
-  };
-  
-  ws.onerror = (error) => {
-    console.error('WebSocket error:', error);
-  };
-  
-  ws.onclose = () => {
-    console.log('WebSocket connection closed');
-  };
+
 });
 
 // 监听外部传入的图表类型与指标变化
