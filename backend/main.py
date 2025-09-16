@@ -66,6 +66,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from backend.data_service.akshare_client import AKShareClient
 from backend.data_service.data_converter import DataConverter
 from backend.data_service.vnpy_database import VnpyDatabaseManager
+from backend.data_service.binance_client import BinanceClient
+from backend.data_service.futures_data_manager import FuturesDataManager
 # from backend.models.bar_data import DataDownloadRequest, DataStatusResponse, BarDataModel
 
 # 回测服务相关导入
@@ -88,6 +90,7 @@ class ConnectionManager:
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
         self.active_connections.append(websocket)
+        self.connection_symbols[websocket] = set()
         print(f"WebSocket连接已建立，当前连接数: {len(self.active_connections)}")
 
     def disconnect(self, websocket: WebSocket):
@@ -103,6 +106,20 @@ class ConnectionManager:
             self.connection_symbols[websocket] = set()
         self.connection_symbols[websocket].add(symbol)
         print(f"连接订阅品种: {symbol}，当前订阅: {self.connection_symbols[websocket]}")
+
+    def unsubscribe_symbol(self, websocket: WebSocket, symbol: str):
+        """取消订阅品种"""
+        if websocket in self.connection_symbols:
+            self.connection_symbols[websocket].discard(symbol)
+            print(f"连接取消订阅品种: {symbol}")
+
+    async def send_personal_message(self, message: str, websocket: WebSocket):
+        """发送个人消息"""
+        try:
+            await websocket.send_text(message)
+        except Exception as e:
+            print(f"发送个人消息失败: {e}")
+            self.disconnect(websocket)
 
     async def broadcast(self, message: str):
         """广播消息给所有连接的客户端"""
@@ -145,11 +162,13 @@ class ConnectionManager:
 manager = None
 event_engine = None
 akshare_client = None
+binance_client = None
 data_converter = None
 db_manager = None
 backtest_manager = None
 strategy_manager = None
 technical_indicators = None
+futures_data_manager = None
 
 # --- 3. VN.PY事件处理器 ---
 class VnPyDataHandler:
@@ -210,13 +229,16 @@ simulation_data = {}
 def get_symbol_base_price(symbol: str) -> float:
     """根据品种获取基础价格"""
     price_map = {
-        'BTCUSDT': 45000.0,
+        'BTCUSDT': 115000.0,  # 更新为当前真实价格
         'ETHUSDT': 2500.0,
-        'BNBUSDT': 300.0,
+        'BNBUSDT': 600.0,     # 更新为当前真实价格
         'ADAUSDT': 0.5,
-        'SOLUSDT': 100.0,
+        'SOLUSDT': 140.0,     # 更新为当前真实价格
         'XRPUSDT': 0.6,
         'DOTUSDT': 7.0,
+        'MATICUSDT': 0.38,    # 添加MATIC价格
+        'DOGEUSDT': 0.12,     # 添加DOGE价格
+        'AVAXUSDT': 30.0,     # 添加AVAX价格
         'SIM001': 100.0,
         'SIM002': 200.0,
         'SIM003': 150.0
@@ -303,17 +325,84 @@ async def simulate_data_loading():
         
         await asyncio.sleep(1)
 
+async def binance_realtime_data():
+    """币安实时数据推送"""
+    await asyncio.sleep(5)
+    print("开始币安实时数据推送...")
+    
+    while True:
+        try:
+            # 获取所有有订阅的币安品种
+            subscribed_symbols = set()
+            for symbols in manager.connection_symbols.values():
+                # 过滤出币安交易对（通常以USDT结尾）
+                binance_symbols = [s for s in symbols if s.endswith('USDT')]
+                subscribed_symbols.update(binance_symbols)
+            
+            # 为每个订阅的币安品种获取实时数据
+            for symbol in subscribed_symbols:
+                try:
+                    # 获取实时价格数据
+                    ticker_list = binance_client.get_24hr_ticker(symbol)
+                    if ticker_list and len(ticker_list) > 0:
+                        ticker = ticker_list[0]  # get_24hr_ticker返回列表
+                        # 发送tick格式数据给KLineChart
+                        tick_message = {
+                            "type": "tick",
+                            "data": {
+                                "symbol": symbol,
+                                "datetime": datetime.now().isoformat(),
+                                "last_price": float(ticker.get('lastPrice', 0)),
+                                "open_price": float(ticker.get('openPrice', 0)),
+                                "high_price": float(ticker.get('highPrice', 0)),
+                                "low_price": float(ticker.get('lowPrice', 0)),
+                                "volume": float(ticker.get('volume', 0)),
+                                "pre_close": float(ticker.get('prevClosePrice', 0))
+                            }
+                        }
+                        
+                        # 同时发送binance_ticker格式给MarketGrid
+                        ticker_message = {
+                            "type": "binance_ticker",
+                            "data": {
+                                "symbol": symbol,
+                                "lastPrice": ticker.get('lastPrice', '0'),
+                                "priceChange": ticker.get('priceChange', '0'),
+                                "priceChangePercent": ticker.get('priceChangePercent', '0'),
+                                "volume": ticker.get('volume', '0'),
+                                "highPrice": ticker.get('highPrice', '0'),
+                                "lowPrice": ticker.get('lowPrice', '0'),
+                                "openPrice": ticker.get('openPrice', '0'),
+                                "quoteVolume": ticker.get('quoteVolume', '0'),
+                                "timestamp": datetime.now().isoformat()
+                            }
+                        }
+                        # 向订阅该品种的连接推送tick数据（给KLineChart）
+                        await manager.broadcast_to_symbol(symbol, json.dumps(tick_message))
+                        # 向订阅该品种的连接推送ticker数据（给MarketGrid）
+                        await manager.broadcast_to_symbol(symbol, json.dumps(ticker_message))
+                        print(f"推送{symbol}数据: 价格={ticker.get('lastPrice', 0)}")
+                except Exception as e:
+                    print(f"获取{symbol}实时数据失败: {e}")
+            
+            await asyncio.sleep(2)  # 每2秒更新一次
+        except Exception as e:
+            print(f"币安实时数据推送出错: {e}")
+            await asyncio.sleep(5)
+
 # --- 5. 生命周期管理 ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # 启动时
-    global manager, event_engine, akshare_client, data_converter, db_manager, backtest_manager, strategy_manager, technical_indicators
+    global manager, event_engine, akshare_client, binance_client, data_converter, db_manager, backtest_manager, strategy_manager, technical_indicators
     manager = ConnectionManager()
     
     # 初始化数据服务组件
     akshare_client = AKShareClient()
+    binance_client = BinanceClient()
     data_converter = DataConverter()
     db_manager = VnpyDatabaseManager()
+    futures_data_manager = FuturesDataManager()
     
     # 初始化回测服务组件
     backtest_manager = BacktestManager()
@@ -345,6 +434,9 @@ async def lifespan(app: FastAPI):
 
     # 启动一个任务来模拟数据加载
     asyncio.create_task(simulate_data_loading())
+    
+    # 启动币安实时数据推送任务
+    asyncio.create_task(binance_realtime_data())
     
     yield
     
@@ -668,6 +760,42 @@ async def get_supported_symbols():
     except Exception as e:
         return {"success": False, "message": f"获取失败: {str(e)}"}
 
+@app.get("/api/binance/symbols")
+async def get_binance_symbols():
+    """获取币安交易对列表"""
+    try:
+        symbols = await binance_client.get_exchange_info()
+        return {"success": True, "data": symbols}
+    except Exception as e:
+        return {"success": False, "message": f"获取币安交易对失败: {str(e)}"}
+
+@app.get("/api/binance/klines/{symbol}")
+async def get_binance_klines(symbol: str, interval: str = "1m", limit: int = 500):
+    """获取币安K线数据"""
+    try:
+        klines = await binance_client.get_klines(symbol, interval, limit)
+        return {"success": True, "data": klines}
+    except Exception as e:
+        return {"success": False, "message": f"获取K线数据失败: {str(e)}"}
+
+@app.get("/api/binance/ticker/{symbol}")
+async def get_binance_ticker(symbol: str):
+    """获取币安24小时价格变动情况"""
+    try:
+        ticker = await binance_client.get_24hr_ticker(symbol)
+        return {"success": True, "data": ticker}
+    except Exception as e:
+        return {"success": False, "message": f"获取价格信息失败: {str(e)}"}
+
+@app.get("/api/binance/depth/{symbol}")
+async def get_binance_depth(symbol: str, limit: int = 100):
+    """获取币安深度信息"""
+    try:
+        depth = await binance_client.get_depth(symbol, limit)
+        return {"success": True, "data": depth}
+    except Exception as e:
+        return {"success": False, "message": f"获取深度信息失败: {str(e)}"}
+
 @app.get("/api/data/status")
 async def get_data_status(symbol: str, exchange: str = "SSE", interval: str = "1m"):
     """获取数据状态"""
@@ -923,29 +1051,88 @@ async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
     try:
         while True:
-            # 接收客户端消息
             data = await websocket.receive_text()
-            try:
-                message = json.loads(data)
-                if message.get('type') == 'market_change':
-                    market_type = message.get('market_type')
-                    print(f"收到市场切换请求: {market_type}")
-                    # 这里可以根据市场类型调整数据生成逻辑
-                    # 目前先记录日志，后续可以扩展
-                elif message.get('type') == 'subscribe_symbol':
-                    symbol = message.get('symbol')
-                    if symbol:
-                        manager.subscribe_symbol(websocket, symbol)
-                        print(f"客户端订阅品种: {symbol}")
-                elif message.get('type') == 'subscribe':
-                    symbols = message.get('symbols', [])
-                    if symbols:
-                        for symbol in symbols:
-                            manager.subscribe_symbol(websocket, symbol)
-                        print(f"客户端批量订阅品种: {symbols}")
-            except json.JSONDecodeError:
-                print(f"收到无效JSON消息: {data}")
+            message = json.loads(data)
+            
+            if message.get("type") == "switch_market":
+                market_type = message.get("market_type")
+                print(f"收到市场切换请求: {market_type}")
+                
+                # 根据市场类型返回相应数据
+                if market_type == "domestic-futures":
+                    # 获取国内期货数据
+                    contracts = futures_data_manager.get_available_contracts()
+                    response = {
+                        "type": "market_data",
+                        "market_type": market_type,
+                        "data": contracts[:50]  # 限制返回数量
+                    }
+                elif market_type == "crypto":
+                    # 获取币安热门交易对
+                    try:
+                        crypto_data = await binance_client.get_popular_symbols()
+                        response = {
+                            "type": "market_data",
+                            "market_type": market_type,
+                            "data": crypto_data
+                        }
+                    except Exception as e:
+                        print(f"获取币安数据失败: {e}")
+                        # 返回默认数据
+                        crypto_data = [
+                            {"symbol": "BTCUSDT", "name": "比特币", "price": 45000, "change": 2.5},
+                            {"symbol": "ETHUSDT", "name": "以太坊", "price": 3200, "change": -1.2},
+                            {"symbol": "BNBUSDT", "name": "币安币", "price": 380, "change": 0.8},
+                        ]
+                        response = {
+                            "type": "market_data",
+                            "market_type": market_type,
+                            "data": crypto_data
+                        }
+                else:
+                    response = {
+                        "type": "error",
+                        "message": f"不支持的市场类型: {market_type}"
+                    }
+                
+                await manager.send_personal_message(json.dumps(response), websocket)
+            
+            elif message.get("type") == "subscribe" or message.get("type") == "subscribe_symbol":
+                symbols = message.get("symbols", [])
+                symbol = message.get("symbol")
+                
+                # 处理单个symbol订阅
+                if symbol:
+                    print(f"订阅品种: {symbol}")
+                    manager.subscribe_symbol(websocket, symbol)
+                    await manager.send_personal_message(
+                        json.dumps({"type": "subscribed", "symbol": symbol}), 
+                        websocket
+                    )
+                
+                # 处理批量symbols订阅
+                if symbols:
+                    print(f"收到批量订阅请求: {symbols}")
+                    for sym in symbols:
+                        manager.subscribe_symbol(websocket, sym)
+                    await manager.send_personal_message(
+                        json.dumps({"type": "subscribed", "symbols": symbols}), 
+                        websocket
+                    )
+            
+            elif message.get("type") == "unsubscribe":
+                symbol = message.get("symbol")
+                if symbol:
+                    manager.unsubscribe_symbol(websocket, symbol)
+                    await manager.send_personal_message(
+                        json.dumps({"type": "unsubscribed", "symbol": symbol}), 
+                        websocket
+                    )
+            
     except WebSocketDisconnect:
+        manager.disconnect(websocket)
+    except Exception as e:
+        print(f"WebSocket错误: {e}")
         manager.disconnect(websocket)
 
 if __name__ == "__main__":
